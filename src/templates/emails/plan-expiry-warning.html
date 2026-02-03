@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f5f5f5; margin: 0; padding: 0; }
+        .container { max-width: 600px; margin: 20px auto; background-color: #ffffff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .header { background-color: #FF9800; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+        .header h1 { margin: 0; font-size: 24px; }
+        .content { padding: 20px; color: #333; }
+        .warning-box { background-color: #fff3e0; padding: 15px; border-left: 4px solid #FF9800; margin: 20px 0; border-radius: 4px; }
+        .button { display: inline-block; background-color: #FF9800; color: white; padding: 12px 30px; text-decoration: none; border-radius: 4px; margin-top: 10px; }
+        .footer { border-top: 1px solid #ddd; padding-top: 20px; margin-top: 20px; text-align: center; color: #666; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Your Plan Expires Soon!</h1>
+        </div>
+        <div class="content">
+            <h2>Hello {{firstName}},</h2>
+            <p>This is a friendly reminder that your subscription plan will expire soon.</p>
+            
+            <div class="warning-box">
+                <strong>⏰ {{daysRemaining}} Days Remaining</strong><br>
+                Expiry Date: <strong>{{expiryDate}}</strong>
+            </div>
+
+            <h3>What Happens When Your Plan Expires?</h3>
+            <ul>
+                <li>You'll lose access to premium questions</li>
+                <li>Your daily question limit will revert to free tier (10 questions/day)</li>
+                <li>Advanced statistics will no longer be available</li>
+            </ul>
+
+            <h3>Renew Your Plan Now</h3>
+            <p>Don't lose access to premium content! Renew your subscription to continue enjoying unlimited access.</p>
+            
+            <p style="text-align: center;">
+                <a href="{{renewalUrl}}" class="button">Renew Now →</a>
+            </p>
+
+            <p style="margin-top: 20px; padding: 15px; background-color: #e8f5e9; border-left: 4px solid #4CAF50; border-radius: 4px;">
+                <strong>Special Offer:</strong> Renew before expiry to avoid any interruption in your learning!
+            </p>
+        </div>
+        <div class="footer">
+            <p>© 2024 University AI CBT. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>

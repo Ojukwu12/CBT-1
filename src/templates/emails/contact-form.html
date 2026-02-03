@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f5f5f5; margin: 0; padding: 0; }
+        .container { max-width: 600px; margin: 20px auto; background-color: #ffffff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .header { background-color: #009688; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+        .header h1 { margin: 0; font-size: 24px; }
+        .content { padding: 20px; color: #333; }
+        .message-box { background-color: #e0f2f1; padding: 15px; border-left: 4px solid #009688; margin: 20px 0; border-radius: 4px; }
+        .footer { border-top: 1px solid #ddd; padding-top: 20px; margin-top: 20px; text-align: center; color: #666; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>New Contact Message</h1>
+        </div>
+        <div class="content">
+            <h2>New Contact Form Submission</h2>
+            <p>You have received a new message from the contact form:</p>
+            
+            <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+                <tr style="background-color: #f9f9f9;">
+                    <td style="padding: 10px; border: 1px solid #ddd;"><strong>From</strong></td>
+                    <td style="padding: 10px; border: 1px solid #ddd;">{{senderName}}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 10px; border: 1px solid #ddd;"><strong>Email</strong></td>
+                    <td style="padding: 10px; border: 1px solid #ddd;">{{senderEmail}}</td>
+                </tr>
+                <tr style="background-color: #f9f9f9;">
+                    <td style="padding: 10px; border: 1px solid #ddd;"><strong>Subject</strong></td>
+                    <td style="padding: 10px; border: 1px solid #ddd;">{{subject}}</td>
+                </tr>
+            </table>
+
+            <div class="message-box">
+                <h3 style="margin-top: 0;">Message:</h3>
+                <p>{{message}}</p>
+            </div>
+
+            <h3>Action Required:</h3>
+            <ul>
+                <li>Review the message</li>
+                <li>Reply to {{senderEmail}}</li>
+                <li>Take appropriate action</li>
+            </ul>
+        </div>
+        <div class="footer">
+            <p>© 2024 University AI CBT. All rights reserved.</p>
+            <p>This is an automated email notification.</p>
+        </div>
+    </div>
+</body>
+</html>

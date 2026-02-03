@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f5f5f5; margin: 0; padding: 0; }
+        .container { max-width: 600px; margin: 20px auto; background-color: #ffffff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .header { background-color: #2196F3; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+        .header h1 { margin: 0; font-size: 24px; }
+        .content { padding: 20px; color: #333; }
+        .success-box { background-color: #e8f5e9; padding: 15px; border-left: 4px solid #4CAF50; margin: 20px 0; border-radius: 4px; }
+        .footer { border-top: 1px solid #ddd; padding-top: 20px; margin-top: 20px; text-align: center; color: #666; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Question Approved ✓</h1>
+        </div>
+        <div class="content">
+            <h2>Hello {{firstName}},</h2>
+            <p>Your submitted question has been reviewed and approved!</p>
+            
+            <div class="success-box">
+                <strong>Question Preview:</strong><br>
+                "{{questionText}}..."<br><br>
+                <strong>Approved By:</strong> {{approveId}}<br>
+                <strong>Date:</strong> {{approvalDate}}
+            </div>
+
+            <h3>What Happens Next?</h3>
+            <ul>
+                <li>Your question is now available in the question bank</li>
+                <li>Students can practice with your question</li>
+                <li>Track its usage and performance statistics</li>
+                <li>Earn points for community contributions</li>
+            </ul>
+
+            <p style="margin-top: 20px; padding: 15px; background-color: #e3f2fd; border-left: 4px solid #2196F3; border-radius: 4px;">
+                <strong>Thank You!</strong> Your contribution helps improve the learning experience for thousands of students.
+            </p>
+        </div>
+        <div class="footer">
+            <p>© 2024 University AI CBT. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>

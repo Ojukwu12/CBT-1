@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f5f5f5; margin: 0; padding: 0; }
+        .container { max-width: 600px; margin: 20px auto; background-color: #ffffff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .header { background-color: #FF9800; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+        .header h1 { margin: 0; font-size: 24px; }
+        .content { padding: 20px; color: #333; }
+        .plan-badge { display: inline-block; background-color: #FF9800; color: white; padding: 8px 16px; border-radius: 4px; font-weight: bold; margin: 10px 0; }
+        .footer { border-top: 1px solid #ddd; padding-top: 20px; margin-top: 20px; text-align: center; color: #666; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Plan Changed</h1>
+        </div>
+        <div class="content">
+            <h2>Hello {{firstName}},</h2>
+            <p>Your subscription plan has been changed.</p>
+            
+            <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+                <tr style="background-color: #f9f9f9;">
+                    <td style="padding: 10px; border: 1px solid #ddd;"><strong>Previous Plan</strong></td>
+                    <td style="padding: 10px; border: 1px solid #ddd;">{{oldPlan}}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 10px; border: 1px solid #ddd;"><strong>Current Plan</strong></td>
+                    <td style="padding: 10px; border: 1px solid #ddd;"><span class="plan-badge">{{newPlan}}</span></td>
+                </tr>
+            </table>
+
+            <p>Your plan change is effective immediately. Some features may no longer be available with your current plan.</p>
+
+            <h3>{{newPlan}} Plan Includes:</h3>
+            <ul>
+                <li>✓ Access to all free content</li>
+                <li>✓ Basic statistics</li>
+                <li>✓ Study tracking</li>
+            </ul>
+
+            <p style="margin-top: 20px; padding: 15px; background-color: #fff3e0; border-left: 4px solid #FF9800; border-radius: 4px;">
+                <strong>Want to upgrade?</strong> You can anytime upgrade back to a higher tier for more features and benefits.
+            </p>
+        </div>
+        <div class="footer">
+            <p>© 2024 University AI CBT. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>
