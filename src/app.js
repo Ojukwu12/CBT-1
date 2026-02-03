@@ -22,6 +22,10 @@ const materialRoutes = require('./routes/material.routes');
 const userRoutes = require('./routes/user.routes');
 const examRoutes = require('./routes/exam.routes');
 const analyticsRoutes = require('./routes/analytics.routes');
+const studyPlanRoutes = require('./routes/studyPlan.routes');
+const leaderboardRoutes = require('./routes/leaderboard.routes');
+const adminAnalyticsRoutes = require('./routes/adminAnalytics.routes');
+const searchRoutes = require('./routes/search.routes');
 
 const app = express();
 
@@ -51,6 +55,10 @@ app.use('/api/courses/:courseId/materials', materialRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/exams', examRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/study-plans', studyPlanRoutes);
+app.use('/api/leaderboards', leaderboardRoutes);
+app.use('/api/admin/analytics', adminAnalyticsRoutes);
+app.use('/api/search', searchRoutes);
 
 // Unknown route handler
 app.use('*', (req, res, next) => {
