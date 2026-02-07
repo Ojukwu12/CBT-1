@@ -1,6 +1,6 @@
 const AdminAnalyticsService = require('../services/adminAnalyticsService');
-const { asyncHandler } = require('../utils/asyncHandler');
-const ApiResponse = require('../utils/ApiResponse');
+const asyncHandler = require('../utils/asyncHandler');
+const ApiResponse = require('../utils/apiResponse');
 
 class AdminAnalyticsController {
   static getOverviewStats = asyncHandler(async (req, res) => {

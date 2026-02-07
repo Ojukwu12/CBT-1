@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
 const { env } = require('./src/config/env');
 const University = require('./src/models/University');
 const Faculty = require('./src/models/Faculty');
@@ -88,9 +89,13 @@ const seedDatabase = async () => {
     console.log('✅ Created topics');
 
     // Create Test Users
+    const hashedPassword1 = await bcrypt.hash('Student@123', 10);
+    const hashedPassword2 = await bcrypt.hash('Admin@123', 10);
+
     const student = await User.create({
       universityId: university._id,
       email: 'student@unizik.edu.ng',
+      password: hashedPassword1,
       firstName: 'John',
       lastName: 'Student',
       plan: 'free',
@@ -100,6 +105,7 @@ const seedDatabase = async () => {
     const admin = await User.create({
       universityId: university._id,
       email: 'admin@unizik.edu.ng',
+      password: hashedPassword2,
       firstName: 'Admin',
       lastName: 'User',
       plan: 'premium',

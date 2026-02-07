@@ -12,6 +12,23 @@ const { env } = require('../config/env');
 
 const logger = new Logger('EmailService');
 
+/**
+ * Get the API base URL - throw error in production if not configured
+ */
+const getApiBaseUrl = () => {
+  if (env.BASE_URL) {
+    return env.BASE_URL;
+  }
+  
+  // In production, BASE_URL must be set
+  if (env.NODE_ENV === 'production') {
+    throw new Error('BASE_URL environment variable must be set in production');
+  }
+  
+  // In development, default to localhost
+  return 'http://localhost:3000';
+};
+
 class EmailService {
   constructor() {
     this.apiKey = env.BREVO_API_KEY;
@@ -19,6 +36,7 @@ class EmailService {
     this.senderEmail = env.EMAIL_FROM || 'noreply@universitycbt.com';
     this.senderName = 'University CBT';
     this.templatesDir = path.join(__dirname, '../templates/emails');
+    this.baseUrl = getApiBaseUrl();
 
     if (!this.apiKey) {
       logger.warn('Brevo API key not configured. Email functionality will be limited.');
@@ -127,7 +145,8 @@ class EmailService {
       firstName: user.firstName,
       email: user.email,
       appName: 'University AI CBT',
-      appUrl: env.APP_URL || 'http://localhost:3000',
+      appUrl: env.APP_URL || this.baseUrl,
+      baseUrl: this.baseUrl,
     });
   }
 
@@ -140,7 +159,8 @@ class EmailService {
       oldPlan,
       newPlan,
       expiryDate: new Date(expiryDate).toLocaleDateString(),
-      appUrl: env.APP_URL || 'http://localhost:3000',
+      appUrl: env.APP_URL || this.baseUrl,
+      baseUrl: this.baseUrl,
     });
   }
 
@@ -152,7 +172,8 @@ class EmailService {
       firstName: user.firstName,
       oldPlan,
       newPlan,
-      appUrl: env.APP_URL || 'http://localhost:3000',
+      appUrl: env.APP_URL || this.baseUrl,
+      baseUrl: this.baseUrl,
     });
   }
 
@@ -167,7 +188,8 @@ class EmailService {
       plan: transaction.plan,
       paymentDate: new Date().toLocaleDateString(),
       expiryDate: new Date(transaction.planExpiryDate).toLocaleDateString(),
-      appUrl: env.APP_URL || 'http://localhost:3000',
+      appUrl: env.APP_URL || this.baseUrl,
+      baseUrl: this.baseUrl,
     });
   }
 
@@ -179,7 +201,8 @@ class EmailService {
       firstName: user.firstName,
       amount: `₦${amount.toLocaleString()}`,
       reason,
-      appUrl: env.APP_URL || 'http://localhost:3000',
+      appUrl: env.APP_URL || this.baseUrl,
+      baseUrl: this.baseUrl,
       supportEmail: env.SUPPORT_EMAIL || 'support@universitycbt.com',
     });
   }
@@ -192,7 +215,8 @@ class EmailService {
       firstName: user.firstName,
       daysRemaining,
       expiryDate: new Date(expiryDate).toLocaleDateString(),
-      renewalUrl: `${env.APP_URL || 'http://localhost:3000'}/plans`,
+      renewalUrl: `${env.BASE_URL || 'http://localhost:3000'}/api/payments/plans`,
+      baseUrl: this.baseUrl,
     });
   }
 
@@ -202,8 +226,9 @@ class EmailService {
   async sendPlanExpiredEmail(user) {
     return this.send(user.email, 'Your Plan Has Expired', 'plan-expired', {
       firstName: user.firstName,
-      renewalUrl: `${env.APP_URL || 'http://localhost:3000'}/plans`,
+      renewalUrl: `${env.BASE_URL || 'http://localhost:3000'}/api/payments/plans`,
       appUrl: env.APP_URL || 'http://localhost:3000',
+      baseUrl: this.baseUrl,
     });
   }
 
@@ -217,6 +242,7 @@ class EmailService {
       approverId: approver.firstName,
       approvalDate: new Date().toLocaleDateString(),
       appUrl: env.APP_URL || 'http://localhost:3000',
+      baseUrl: this.baseUrl,
     });
   }
 
@@ -228,7 +254,8 @@ class EmailService {
       firstName: admin.firstName,
       questionText: question.text.substring(0, 100),
       rejectionReason: reason || 'No reason provided',
-      resubmitUrl: `${env.APP_URL || 'http://localhost:3000'}/questions/edit/${question._id}`,
+      resubmitUrl: `${env.BASE_URL || 'http://localhost:3000'}/api/questions/${question._id}`,
+      baseUrl: this.baseUrl,
     });
   }
 
@@ -240,6 +267,7 @@ class EmailService {
       otp,
       expiryMinutes,
       appName: 'University AI CBT',
+      baseUrl: this.baseUrl,
     });
   }
 
@@ -251,6 +279,7 @@ class EmailService {
       resetLink,
       expiryHours,
       appUrl: env.APP_URL || 'http://localhost:3000',
+      baseUrl: this.baseUrl,
     });
   }
 
@@ -264,7 +293,129 @@ class EmailService {
       subject,
       message,
       replyUrl: `mailto:${email}`,
+      baseUrl: this.baseUrl,
     });
+  }
+
+  /**
+   * Send bulk email to multiple users
+   */
+  async sendBulkEmail(recipients, subject, template, variables = {}) {
+    try {
+      if (!recipients || recipients.length === 0) {
+        throw new ApiError(400, 'No recipients provided');
+      }
+
+      const htmlContent = this.loadTemplate(template);
+      const compiledHtml = this.compileTemplate(htmlContent, variables);
+
+      // If no API key, just log (development mode)
+      if (!this.apiKey) {
+        logger.info(`[DEV MODE] Bulk email sent to ${recipients.length} recipients - Subject: ${subject}`);
+        return {
+          success: true,
+          recipientCount: recipients.length,
+          subject,
+          template,
+          isDev: true,
+          timestamp: new Date(),
+        };
+      }
+
+      // Send via Brevo API
+      const response = await axios.post(
+        `${this.apiUrl}/smtp/email`,
+        {
+          to: recipients.map(email => ({ email })),
+          sender: {
+            email: this.senderEmail,
+            name: this.senderName,
+          },
+          subject,
+          htmlContent: compiledHtml,
+          replyTo: {
+            email: env.SUPPORT_EMAIL || 'support@universitycbt.com',
+          },
+        },
+        {
+          headers: {
+            'api-key': this.apiKey,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      logger.info(`Bulk email sent to ${recipients.length} recipients - Subject: ${subject} - MessageID: ${response.data.messageId}`);
+
+      return {
+        success: true,
+        recipientCount: recipients.length,
+        subject,
+        template,
+        messageId: response.data.messageId,
+        timestamp: new Date(),
+      };
+    } catch (err) {
+      logger.error(`Failed to send bulk email`, err.response?.data || err.message);
+      throw new ApiError(500, 'Failed to send bulk email');
+    }
+  }
+
+  /**
+   * Send admin notification email
+   */
+  async sendAdminNotificationEmail(adminEmail, title, content, actionUrl = null) {
+    const variables = {
+      adminEmail,
+      title,
+      content,
+      actionUrl: actionUrl || '#',
+      actionText: actionUrl ? 'View Details' : '',
+      appUrl: env.APP_URL || 'http://localhost:3000',
+      timestamp: new Date().toLocaleString(),
+    };
+
+    return this.send(adminEmail, `Admin Notification: ${title}`, 'admin-notification', variables);
+  }
+
+  /**
+   * Send system alert to admin
+   */
+  async sendAdminAlertEmail(adminEmail, severity, alertTitle, alertMessage) {
+    const variables = {
+      severity: severity.toUpperCase(), // 'warning', 'critical', 'info'
+      alertTitle,
+      alertMessage,
+      timestamp: new Date().toLocaleString(),
+      dashboardUrl: `${env.APP_URL || 'http://localhost:3000'}/admin/dashboard`,
+    };
+
+    return this.send(
+      adminEmail,
+      `[${severity.toUpperCase()}] ${alertTitle}`,
+      'admin-alert',
+      variables
+    );
+  }
+
+  /**
+   * Send user suspension/ban notification
+   */
+  async sendUserBanNotificationEmail(user, reason, banDuration = null) {
+    const variables = {
+      firstName: user.firstName,
+      reason,
+      banDuration: banDuration || 'Permanent',
+      supportEmail: env.SUPPORT_EMAIL || 'support@universitycbt.com',
+      appUrl: env.APP_URL || 'http://localhost:3000',
+    };
+
+    return this.send(
+      user.email,
+      'Account Suspension Notice',
+      'user-ban-notification',
+      variables
+    );
   }
 }
 

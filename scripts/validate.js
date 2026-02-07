@@ -71,7 +71,8 @@ console.log(`\n${colors.cyan}╔════════════════
 console.log(`║  Phase 0 Backend - Validation & Health Check       ║`);
 console.log(`╚════════════════════════════════════════════════════╝${colors.reset}\n`);
 
-const srcPath = path.join(__dirname, 'src');
+const projectRoot = path.join(__dirname, '..');
+const srcPath = path.join(projectRoot, 'src');
 const modelsPath = path.join(srcPath, 'models');
 const servicesPath = path.join(srcPath, 'services');
 const controllersPath = path.join(srcPath, 'controllers');
@@ -190,8 +191,8 @@ testFileExists(path.join(srcPath, 'server.js'), 'Server Entry Point');
 
 // 10. Root Configuration
 log.header('10. Root Configuration Files');
-testFileExists(path.join(__dirname, 'package.json'), 'Package.json');
-testFileExists(path.join(__dirname, '.env.example'), '.env.example');
+testFileExists(path.join(projectRoot, 'package.json'), 'Package.json');
+testFileExists(path.join(projectRoot, '.env.example'), '.env.example');
 
 // 11. Application Files Content Checks
 log.header('11. Code Integration Checks');
@@ -218,7 +219,7 @@ testFileContent(
 
 // 12. Dependencies Check
 log.header('12. Dependencies in package.json');
-const packageJson = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'));
+const packageJson = JSON.parse(fs.readFileSync(path.join(projectRoot, 'package.json'), 'utf8'));
 const requiredDeps = [
   'express',
   'mongoose',

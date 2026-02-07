@@ -36,9 +36,9 @@ class ExamService {
     }
 
     // Apply tier-based access control
-    if (user.tier === 'free') {
+    if (user.plan === 'free') {
       query.accessLevel = 'free';
-    } else if (user.tier === 'basic') {
+    } else if (user.plan === 'basic') {
       query.accessLevel = { $in: ['free', 'basic'] };
     }
     // Premium users get all questions
@@ -126,6 +126,9 @@ class ExamService {
 
     // Update question attempt data
     const oldData = examSession.questionsData[questionIndex];
+    const wasNotAnswered = !oldData.selectedAnswer;
+    const wasNotCorrect = !oldData.isCorrect;
+
     examSession.questionsData[questionIndex] = {
       ...oldData,
       selectedAnswer,
@@ -134,22 +137,27 @@ class ExamService {
       attemptedAt: new Date()
     };
 
-    // Update exam session stats
-    if (!oldData.selectedAnswer) {
-      // Only count as answered if it wasn't answered before
-      examSession.answeredQuestions = (examSession.answeredQuestions || 0) + 1;
-    }
-
-    if (isCorrect) {
-      if (!oldData.isCorrect) {
-        // Changed from incorrect to correct
-        examSession.correctAnswers = (examSession.correctAnswers || 0) + 1;
+    // Use atomic operations to prevent race conditions
+    const updateOps = {
+      $set: {
+        [`questionsData.${questionIndex}`]: examSession.questionsData[questionIndex],
+      },
+      $inc: {
+        timeSpentSeconds: timeSpentSeconds || 0
       }
+    };
+
+    // Only increment counters if conditions are met
+    if (wasNotAnswered) {
+      updateOps.$inc.answeredQuestions = 1;
+    }
+    if (isCorrect && wasNotCorrect) {
+      updateOps.$inc.correctAnswers = 1;
     }
 
-    examSession.timeSpentSeconds = (examSession.timeSpentSeconds || 0) + timeSpentSeconds;
+    await ExamSession.findByIdAndUpdate(examSessionId, updateOps, { new: true });
 
-    // Update question statistics
+    // Update question statistics atomically
     await Question.findByIdAndUpdate(
       questionId,
       {
@@ -158,12 +166,15 @@ class ExamService {
           'stats.correctAnswers': isCorrect ? 1 : 0,
           'stats.incorrectAnswers': isCorrect ? 0 : 1
         },
-        'stats.lastAttemptedAt': new Date()
+        $set: {
+          'stats.lastAttemptedAt': new Date()
+        }
       },
       { new: true }
     );
 
-    await examSession.save();
+    // Reload exam session to get updated data
+    const updatedExamSession = await ExamSession.findById(examSessionId);
 
     return {
       questionId,
@@ -206,32 +217,49 @@ class ExamService {
     if (!examSession) throw new ApiError(404, 'Exam session not found');
 
     if (examSession.status !== 'in_progress') {
-      throw new ApiError(400, 'Exam is not in progress');
+      throw new ApiError(400, `Exam is ${examSession.status}. Cannot submit again.`);
     }
 
     // Calculate final score
-    examSession.score = examSession.calculateScore();
-    examSession.percentage = examSession.score;
-    examSession.status = 'submitted';
-    examSession.submittedAt = new Date();
-    examSession.markAsPassed();
+    const score = examSession.calculateScore();
+    const percentage = score;
+    
+    // Use atomic update to prevent race condition (double submission)
+    const updatedExamSession = await ExamSession.findOneAndUpdate(
+      { 
+        _id: examSessionId,
+        status: 'in_progress' // Only update if still in progress
+      },
+      {
+        $set: {
+          score,
+          percentage,
+          status: 'submitted',
+          submittedAt: new Date(),
+          isPassed: percentage >= (examSession.passingScore || 70)
+        }
+      },
+      { new: true }
+    );
 
-    await examSession.save();
-
-    // Update user analytics
-    let analytics = await UserAnalytics.findOne({ userId: examSession.userId });
-    if (!analytics) {
-      analytics = new UserAnalytics({ userId: examSession.userId });
+    if (!updatedExamSession) {
+      throw new ApiError(409, 'Exam was already submitted or status changed');
     }
 
-    await analytics.updateStats(examSession);
+    // Update user analytics
+    let analytics = await UserAnalytics.findOne({ userId: updatedExamSession.userId });
+    if (!analytics) {
+      analytics = new UserAnalytics({ userId: updatedExamSession.userId });
+    }
+
+    await analytics.updateStats(updatedExamSession);
 
     return {
-      examSessionId: examSession._id,
-      score: examSession.score,
-      percentage: examSession.percentage,
-      isPassed: examSession.isPassed,
-      summary: examSession.getPerformanceSummary()
+      examSessionId: updatedExamSession._id,
+      score: updatedExamSession.score,
+      percentage: updatedExamSession.percentage,
+      isPassed: updatedExamSession.isPassed,
+      summary: updatedExamSession.getPerformanceSummary()
     };
   }
 

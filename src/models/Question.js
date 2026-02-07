@@ -85,5 +85,6 @@ const questionSchema = new mongoose.Schema(
 
 questionSchema.index({ universityId: 1, courseId: 1, topicId: 1 });
 questionSchema.index({ universityId: 1, status: 1, accessLevel: 1 });
+questionSchema.index({ text: 'text' });
 
 module.exports = mongoose.model('Question', questionSchema);

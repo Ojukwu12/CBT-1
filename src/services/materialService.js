@@ -2,6 +2,7 @@ const Material = require('../models/Material');
 const Question = require('../models/Question');
 const AIGenerationLog = require('../models/AIGenerationLog');
 const { generateQuestions } = require('../utils/gemini');
+const { env } = require('../config/env');
 const ApiError = require('../utils/ApiError');
 
 const uploadMaterial = async (materialData) => {
@@ -43,12 +44,53 @@ const generateQuestionsFromMaterial = async (
     throw new ApiError(400, 'Material has no content to generate questions from');
   }
 
+  if (!env.AI_ENABLED) {
+    throw new ApiError(503, 'AI generation is disabled in this environment');
+  }
+
+  if (!env.GEMINI_API_KEY) {
+    throw new ApiError(503, 'AI generation unavailable: missing API key');
+  }
+
+  const cacheHours = env.AI_CACHE_HOURS || 24;
+  const cacheThreshold = new Date(Date.now() - cacheHours * 60 * 60 * 1000);
+  const cachedLog = await AIGenerationLog.findOne({
+    materialId,
+    status: 'success',
+    createdAt: { $gte: cacheThreshold },
+  }).sort({ createdAt: -1 });
+
+  if (cachedLog?.generatedQuestionIds?.length) {
+    const cachedQuestions = await Question.find({
+      _id: { $in: cachedLog.generatedQuestionIds },
+    });
+    if (cachedQuestions.length) {
+      return {
+        log: cachedLog,
+        questions: cachedQuestions,
+      };
+    }
+  }
+
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+  const dailyLimit = env.AI_DAILY_LIMIT || 50;
+  const todayCount = await AIGenerationLog.countDocuments({
+    universityId: material.universityId,
+    createdAt: { $gte: startOfDay },
+    status: { $in: ['pending', 'success'] },
+  });
+  if (dailyLimit > 0 && todayCount >= dailyLimit) {
+    throw new ApiError(429, 'Daily AI generation limit reached');
+  }
+
   let log = new AIGenerationLog({
     materialId,
     universityId: material.universityId,
     initiatedBy: adminId,
     status: 'pending',
   });
+  log = await log.save();
 
   try {
     const course = await require('../models/Course').findById(material.courseId);

@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; background: #f9f9f9; }
+        .header { background: #f44336; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
+        .content { background: white; padding: 20px; border-radius: 0 0 5px 5px; }
+        .footer { text-align: center; padding: 20px; color: #999; font-size: 12px; }
+        .alert { padding: 15px; margin: 10px 0; border-left: 4px solid #f44336; background: #fff5f5; }
+        .reason-box { background: #fff3cd; padding: 15px; border-left: 4px solid #ff9800; margin: 15px 0; }
+        a { color: #f44336; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2>Account Suspension Notice</h2>
+        </div>
+        <div class="content">
+            <p>Hi {{firstName}},</p>
+            <p>Your account has been suspended effective immediately.</p>
+            
+            <div class="alert">
+                <p><strong>Account Status:</strong> SUSPENDED</p>
+                <p><strong>Suspension Duration:</strong> {{banDuration}}</p>
+            </div>
+
+            <div class="reason-box">
+                <p><strong>Reason for Suspension:</strong></p>
+                <p>{{reason}}</p>
+            </div>
+
+            <p>If you believe this is a mistake or would like to appeal this decision, please contact our support team immediately:</p>
+            <p><strong>Email:</strong> <a href="mailto:{{supportEmail}}">{{supportEmail}}</a></p>
+
+            <p>Best regards,<br>
+            University AI CBT Support Team</p>
+        </div>
+        <div class="footer">
+            <p>&copy; 2026 University AI CBT. All rights reserved.</p>
+            <p><a href="{{appUrl}}">Visit our website</a></p>
+        </div>
+    </div>
+</body>
+</html>

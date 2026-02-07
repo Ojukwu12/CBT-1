@@ -1,6 +1,6 @@
 const AnalyticsService = require('../services/analyticsService');
 const asyncHandler = require('../utils/asyncHandler');
-const ApiResponse = require('../utils/ApiResponse');
+const ApiResponse = require('../utils/apiResponse');
 
 class AnalyticsController {
   /**

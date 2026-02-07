@@ -1,13 +1,14 @@
 const SearchService = require('../services/searchService');
-const { asyncHandler } = require('../utils/asyncHandler');
-const ApiResponse = require('../utils/ApiResponse');
+const asyncHandler = require('../utils/asyncHandler');
+const ApiResponse = require('../utils/apiResponse');
+const ApiError = require('../utils/ApiError');
 
 class SearchController {
   static searchQuestions = asyncHandler(async (req, res) => {
     const { q, difficulty, topicId, courseId, page = 1, limit = 20 } = req.query;
 
     if (!q) {
-      return res.status(400).json(new ApiResponse(400, null, 'Search query required'));
+      throw new ApiError(400, 'Search query required');
     }
 
     const result = await SearchService.searchQuestions(
@@ -23,6 +24,16 @@ class SearchController {
   static advancedFilter = asyncHandler(async (req, res) => {
     const { difficulty, topicId, courseId, minAccuracy, maxAttempts, question, sort, page = 1, limit = 20 } = req.query;
 
+    // Safely parse sort parameter
+    let parsedSort = undefined;
+    if (sort) {
+      try {
+        parsedSort = JSON.parse(sort);
+      } catch (err) {
+        throw new ApiError(400, 'Invalid sort parameter: must be valid JSON');
+      }
+    }
+
     const filters = {
       difficulty,
       topicId,
@@ -30,7 +41,7 @@ class SearchController {
       minAccuracy: minAccuracy ? parseInt(minAccuracy) : undefined,
       maxAttempts: maxAttempts ? parseInt(maxAttempts) : undefined,
       question,
-      sort: sort ? JSON.parse(sort) : undefined
+      sort: parsedSort
     };
 
     const result = await SearchService.advancedFilterQuestions(
@@ -46,7 +57,7 @@ class SearchController {
     const { q, page = 1, limit = 20 } = req.query;
 
     if (!q) {
-      return res.status(400).json(new ApiResponse(400, null, 'Search query required'));
+      throw new ApiError(400, 'Search query required');
     }
 
     const result = await SearchService.searchTopics(q, parseInt(page), parseInt(limit));
@@ -58,7 +69,7 @@ class SearchController {
     const { q, page = 1, limit = 10 } = req.query;
 
     if (!q) {
-      return res.status(400).json(new ApiResponse(400, null, 'Search query required'));
+      throw new ApiError(400, 'Search query required');
     }
 
     const result = await SearchService.globalSearch(q, parseInt(page), parseInt(limit));

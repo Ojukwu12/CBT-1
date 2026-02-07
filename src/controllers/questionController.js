@@ -3,6 +3,11 @@ const topicService = require('../services/topicService');
 const asyncHandler = require('../utils/asyncHandler');
 const validate = require('../middleware/validate.middleware');
 const { approveRejectSchema } = require('../validators/question.validator');
+const emailService = require('../services/emailService');
+const User = require('../models/User');
+const Logger = require('../utils/logger');
+
+const logger = new Logger('QuestionController');
 
 const getQuestionsByTopic = asyncHandler(async (req, res) => {
   const { topicId } = req.params;
@@ -65,6 +70,18 @@ const approveQuestion = [
       adminId,
       notes
     );
+
+    // Send approval email to creator
+    try {
+      const approver = await User.findById(adminId);
+      const creator = await User.findOne({ 'createdQuestions': questionId });
+      if (creator && approver) {
+        await emailService.sendQuestionApprovedEmail(creator, question, approver);
+      }
+    } catch (err) {
+      logger.error('Question approval email failed:', err);
+    }
+
     res.status(200).json({
       success: true,
       data: question,
@@ -84,6 +101,17 @@ const rejectQuestion = [
       adminId,
       notes
     );
+
+    // Send rejection email to creator
+    try {
+      const creator = await User.findOne({ 'createdQuestions': questionId });
+      if (creator) {
+        await emailService.sendQuestionRejectedEmail(creator, question, notes);
+      }
+    } catch (err) {
+      logger.error('Question rejection email failed:', err);
+    }
+
     res.status(200).json({
       success: true,
       data: question,

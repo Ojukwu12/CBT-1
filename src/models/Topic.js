@@ -30,5 +30,6 @@ const topicSchema = new mongoose.Schema(
 );
 
 topicSchema.index({ courseId: 1, name: 1 }, { unique: true });
+topicSchema.index({ name: 'text', description: 'text' });
 
 module.exports = mongoose.model('Topic', topicSchema);

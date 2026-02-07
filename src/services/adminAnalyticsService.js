@@ -38,8 +38,9 @@ class AdminAnalyticsService {
       { $group: { _id: null, avgExams: { $avg: '$count' } } }
     ]);
 
-    const retentionRate = await User.countDocuments({ lastLogin: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } })
-      .then(active => (active / (await User.countDocuments())) * 100);
+    const activeUsers = await User.countDocuments({ lastLogin: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } });
+    const totalUsers = await User.countDocuments();
+    const retentionRate = totalUsers > 0 ? (activeUsers / totalUsers) * 100 : 0;
 
     return {
       usersByTier: Object.fromEntries(usersByTier.map(u => [u._id, u.count])),
@@ -139,12 +140,13 @@ class AdminAnalyticsService {
 
   static async getUniversityStats(universityId) {
     const universityUsers = await User.countDocuments({ universityId });
+    const userIds = (await User.find({ universityId }).select('_id')).map(u => u._id);
     const universityExams = await ExamSession.countDocuments({
-      userId: { $in: (await User.find({ universityId }).select('_id')).map(u => u._id) }
+      userId: { $in: userIds }
     });
 
     const avgScore = await ExamSession.aggregate([
-      { $match: { userId: { $in: (await User.find({ universityId }).select('_id')).map(u => u._id) } } },
+      { $match: { userId: { $in: userIds } } },
       { $group: { _id: null, avgScore: { $avg: '$score' } } }
     ]);
 

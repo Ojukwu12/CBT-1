@@ -2,9 +2,10 @@ const bcrypt = require('bcryptjs');
 const { generateToken } = require('../middleware/auth.middleware');
 const User = require('../models/User');
 const ApiError = require('../utils/ApiError');
-const ApiResponse = require('../utils/ApiResponse');
+const ApiResponse = require('../utils/apiResponse');
 const Logger = require('../utils/logger');
 const asyncHandler = require('../utils/asyncHandler');
+const emailService = require('../services/emailService');
 
 const logger = new Logger('AuthController');
 
@@ -37,6 +38,14 @@ const register = asyncHandler(async (req, res, next) => {
   });
 
   await user.save();
+
+  // Send welcome email
+  try {
+    await emailService.sendWelcomeEmail(user);
+  } catch (err) {
+    logger.error('Welcome email failed:', err);
+    // Don't fail registration if email fails
+  }
 
   // Generate token
   const token = generateToken({
@@ -71,8 +80,8 @@ const register = asyncHandler(async (req, res, next) => {
 const login = asyncHandler(async (req, res, next) => {
   const { email, password } = req.body;
 
-  // Find user
-  const user = await User.findOne({ email });
+  // Find user and explicitly select password
+  const user = await User.findOne({ email }).select('+password');
   if (!user) {
     return next(new ApiError(401, 'Invalid email or password'));
   }

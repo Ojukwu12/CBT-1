@@ -1,6 +1,6 @@
 const LeaderboardService = require('../services/leaderboardService');
 const asyncHandler = require('../utils/asyncHandler');
-const ApiResponse = require('../utils/ApiResponse');
+const ApiResponse = require('../utils/apiResponse');
 
 class LeaderboardController {
   static getGlobalLeaderboard = asyncHandler(async (req, res) => {

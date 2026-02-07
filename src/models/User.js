@@ -16,6 +16,11 @@ const userSchema = new mongoose.Schema(
       trim: true,
       index: true,
     },
+    password: {
+      type: String,
+      required: true,
+      select: false,
+    },
     firstName: {
       type: String,
       trim: true,
@@ -41,6 +46,10 @@ const userSchema = new mongoose.Schema(
       enum: ['student', 'admin'],
       default: 'student',
     },
+    banReason: String,
+    bannedAt: Date,
+    unbanDate: Date,
+    banDuration: String,
     stats: {
       questionsAttempted: { type: Number, default: 0 },
       questionsCorrect: { type: Number, default: 0 },

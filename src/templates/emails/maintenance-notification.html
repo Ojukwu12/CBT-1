@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; background: #f9f9f9; }
+        .header { background: #ff9800; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
+        .content { background: white; padding: 20px; border-radius: 0 0 5px 5px; }
+        .footer { text-align: center; padding: 20px; color: #999; font-size: 12px; }
+        .alert { padding: 15px; margin: 10px 0; border-left: 4px solid #ff9800; background: #fff3e0; }
+        a { color: #ff9800; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2>🔧 System Maintenance Notice</h2>
+        </div>
+        <div class="content">
+            <p>Hi,</p>
+            <p>We will be performing scheduled maintenance on our system. Please be aware of the following:</p>
+            
+            <div class="alert">
+                <p><strong>Maintenance Title:</strong> {{title}}</p>
+                <p><strong>Start Time:</strong> {{startTime}}</p>
+                <p><strong>End Time:</strong> {{endTime}}</p>
+                <p><strong>Expected Impact:</strong> {{impact}}</p>
+            </div>
+
+            <p>During this time, you may experience service interruptions. We apologize for any inconvenience this may cause.</p>
+            
+            <p>For support or questions, please contact us at:</p>
+            <p><strong>Email:</strong> <a href="mailto:{{supportEmail}}">{{supportEmail}}</a></p>
+
+            <p>Thank you for your patience.<br>
+            University AI CBT Team</p>
+        </div>
+        <div class="footer">
+            <p>&copy; 2026 University AI CBT. All rights reserved.</p>
+            <p><a href="{{appUrl}}">Visit our website</a></p>
+        </div>
+    </div>
+</body>
+</html>

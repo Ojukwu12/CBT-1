@@ -90,7 +90,7 @@ class SearchService {
     const skip = (page - 1) * limit;
 
     const searchQuery = {
-      status: 'active',
+      isActive: true,
       $text: { $search: query }
     };
 
@@ -121,7 +121,7 @@ class SearchService {
         .select('-answers')
         .limit(limit)
         .sort({ score: { $meta: 'textScore' } }),
-      Topic.find({ status: 'active', $text: { $search: query } })
+      Topic.find({ isActive: true, $text: { $search: query } })
         .limit(limit)
         .sort({ score: { $meta: 'textScore' } })
     ]);

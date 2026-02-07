@@ -1,6 +1,6 @@
 const StudyPlanService = require('../services/studyPlanService');
 const asyncHandler = require('../utils/asyncHandler');
-const ApiResponse = require('../utils/ApiResponse');
+const ApiResponse = require('../utils/apiResponse');
 
 class StudyPlanController {
   static createPlan = asyncHandler(async (req, res) => {

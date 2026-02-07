@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; background: #f9f9f9; }
+        .header { background: #2196F3; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
+        .content { background: white; padding: 20px; border-radius: 0 0 5px 5px; }
+        .footer { text-align: center; padding: 20px; color: #999; font-size: 12px; }
+        .alert { padding: 15px; margin: 10px 0; border-left: 4px solid #2196F3; background: #f0f7ff; }
+        a { color: #2196F3; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2>Role Change Notification</h2>
+        </div>
+        <div class="content">
+            <p>Hi {{firstName}},</p>
+            <p>Your account role has been updated.</p>
+            
+            <div class="alert">
+                <p><strong>Previous Role:</strong> {{oldRole}}</p>
+                <p><strong>New Role:</strong> {{newRole}}</p>
+            </div>
+
+            <p>Your account permissions have been updated to reflect this change. You now have access to features associated with your new role.</p>
+            
+            <p>If you have any questions about your role change, please contact our support team.</p>
+
+            <p>Best regards,<br>
+            University AI CBT Team</p>
+        </div>
+        <div class="footer">
+            <p>&copy; 2026 University AI CBT. All rights reserved.</p>
+            <p><a href="{{appUrl}}">Visit our website</a></p>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; background: #f9f9f9; }
+        .header { background: #4CAF50; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
+        .content { background: white; padding: 20px; border-radius: 0 0 5px 5px; }
+        .footer { text-align: center; padding: 20px; color: #999; font-size: 12px; }
+        .alert { padding: 15px; margin: 10px 0; border-left: 4px solid #4CAF50; background: #f0f8f0; }
+        a { color: #4CAF50; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2>Renew Your Plan</h2>
+        </div>
+        <div class="content">
+            <p>Hi,</p>
+            <p>Your subscription plan is about to expire in {{daysUntilExpiry}} days. Renew now to maintain uninterrupted access!</p>
+            
+            <div class="alert">
+                <p><strong>⏰ Action Required:</strong> Your premium features will be limited once your plan expires.</p>
+                <p><strong>✅ Solution:</strong> Renew your plan today to continue enjoying all features.</p>
+            </div>
+
+            <p style="text-align: center; margin: 20px 0;">
+                <a href="{{renewalUrl}}" style="background: #4CAF50; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">Renew Plan Now</a>
+            </p>
+
+            <p>If you have any questions or need assistance, please contact our support team at {{supportEmail}}</p>
+
+            <p>Best regards,<br>
+            University AI CBT Team</p>
+        </div>
+        <div class="footer">
+            <p>&copy; 2026 University AI CBT. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>

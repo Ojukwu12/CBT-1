@@ -15,8 +15,16 @@ const generalLimiter = createRateLimiter(15 * 60 * 1000, 100); // 100 requests p
 const authLimiter = createRateLimiter(15 * 60 * 1000, 5); // 5 attempts per 15 min (Phase 1)
 const aiLimiter = createRateLimiter(60 * 60 * 1000, 10); // 10 AI requests per hour
 
+// Payment-specific limiters (stricter for financial operations)
+const paymentInitializeLimiter = createRateLimiter(60 * 60 * 1000, 10); // 10 payment initiations per hour per user
+const paymentVerifyLimiter = createRateLimiter(60 * 60 * 1000, 20); // 20 verification attempts per hour per user
+const webhookLimiter = createRateLimiter(60 * 60 * 1000, 100); // 100 webhooks per hour per IP (reasonable for production)
+
 module.exports = {
   generalLimiter,
   authLimiter,
   aiLimiter,
+  paymentInitializeLimiter,
+  paymentVerifyLimiter,
+  webhookLimiter,
 };

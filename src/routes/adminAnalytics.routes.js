@@ -1,14 +1,16 @@
 const express = require('express');
 const router = express.Router();
 const AdminAnalyticsController = require('../controllers/adminAnalyticsController');
+const AdminNotificationController = require('../controllers/adminNotificationController');
 const { verifyToken } = require('../middleware/auth.middleware');
-const { validate } = require('../middleware/validate.middleware');
+const validate = require('../middleware/validate.middleware');
+const ApiError = require('../utils/ApiError');
 const Joi = require('joi');
 
 // Admin role verification middleware
 const isAdmin = (req, res, next) => {
   if (!req.user || req.user.role !== 'admin') {
-    return res.status(403).json({ message: 'Admin access required' });
+    return next(new ApiError(403, 'Admin access required'));
   }
   next();
 };
@@ -26,7 +28,30 @@ const exportQuerySchema = Joi.object({
   format: Joi.string().valid('json', 'csv').default('json')
 });
 
-// Routes
+const sendBulkEmailSchema = Joi.object({
+  subject: Joi.string().required().min(5).max(200),
+  template: Joi.string().required(),
+  variables: Joi.object().optional(),
+  filters: Joi.object().optional(),
+});
+
+const sendAnnouncementSchema = Joi.object({
+  title: Joi.string().required().min(5).max(100),
+  content: Joi.string().required().min(10).max(2000),
+});
+
+const sendMaintenanceSchema = Joi.object({
+  title: Joi.string().required().min(5).max(100),
+  startTime: Joi.date().required(),
+  endTime: Joi.date().required(),
+  impact: Joi.string().optional().max(500),
+});
+
+const sendPlanExpiryReminderSchema = Joi.object({
+  daysUntilExpiry: Joi.number().optional().default(7),
+});
+
+// Analytics Routes
 router.get('/overview', verifyToken, isAdmin, AdminAnalyticsController.getOverviewStats);
 router.get('/users', verifyToken, isAdmin, AdminAnalyticsController.getUserMetrics);
 router.get('/questions', verifyToken, isAdmin, AdminAnalyticsController.getQuestionPerformance);
@@ -35,5 +60,11 @@ router.get('/revenue', verifyToken, isAdmin, AdminAnalyticsController.getRevenue
 router.get('/university/:universityId', verifyToken, isAdmin, validate(universityParamsSchema), AdminAnalyticsController.getUniversityStats);
 router.get('/export', verifyToken, isAdmin, validate(exportQuerySchema), AdminAnalyticsController.exportData);
 router.get('/report/:type', verifyToken, isAdmin, validate(reportParamsSchema), AdminAnalyticsController.generateReport);
+
+// Notification Routes
+router.post('/notifications/send-bulk', verifyToken, isAdmin, validate(sendBulkEmailSchema), AdminNotificationController.sendBulkEmail);
+router.post('/notifications/announcement', verifyToken, isAdmin, validate(sendAnnouncementSchema), AdminNotificationController.sendAnnouncement);
+router.post('/notifications/maintenance', verifyToken, isAdmin, validate(sendMaintenanceSchema), AdminNotificationController.sendMaintenanceNotification);
+router.post('/notifications/plan-expiry-reminder', verifyToken, isAdmin, validate(sendPlanExpiryReminderSchema), AdminNotificationController.sendPlanExpiryReminder);
 
 module.exports = router;

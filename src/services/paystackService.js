@@ -250,6 +250,82 @@ class PaystackService {
       return [];
     }
   }
+
+  /**
+   * Verify webhook signature from Paystack
+   * Paystack sends this in the x-paystack-signature header
+   */
+  verifyWebhookSignature(body, signature) {
+    try {
+      const crypto = require('crypto');
+      const hash = crypto
+        .createHmac('sha512', this.secretKey)
+        .update(JSON.stringify(body))
+        .digest('hex');
+      
+      const isValid = hash === signature;
+      if (!isValid) {
+        logger.warn('Invalid webhook signature detected');
+      }
+      return isValid;
+    } catch (err) {
+      logger.error('Webhook signature verification error:', err);
+      return false;
+    }
+  }
+
+  /**
+   * Check if webhook request is from Paystack IP range
+   * Optional additional security layer
+   */
+  isFromPaystackIP(clientIP) {
+    try {
+      // Paystack IP ranges (as of 2024 - should be updated periodically)
+      const paystackIPs = [
+        '52.88.84.215',
+        '52.15.241.248',
+        '54.80.249.152',
+        '34.203.37.255',
+      ];
+
+      // Support IPv4 and also allow localhost for testing
+      if (clientIP === '::1' || clientIP === '127.0.0.1') {
+        return true; // Allow localhost for development
+      }
+
+      const ip = clientIP.split(',')[0].trim(); // Handle X-Forwarded-For header
+      const isValid = paystackIPs.includes(ip);
+
+      if (!isValid) {
+        logger.warn(`Webhook received from unknown IP: ${ip}`);
+      }
+
+      return isValid;
+    } catch (err) {
+      logger.error('IP validation error:', err);
+      return false; // Fail open to IP validation (webhook signature is primary security)
+    }
+  }
+
+  /**
+   * Log webhook event for debugging and monitoring
+   */
+  logWebhookEvent(event, data, status = 'received') {
+    try {
+      const logEntry = {
+        timestamp: new Date(),
+        event,
+        reference: data?.reference,
+        status,
+        amount: data?.amount ? data.amount / 100 : null,
+        email: data?.customer?.email,
+      };
+
+      logger.info(`Webhook ${status}: ${JSON.stringify(logEntry)}`);
+    } catch (err) {
+      logger.error('Error logging webhook event', err);
+    }
+  }
 }
 
 // Singleton instance

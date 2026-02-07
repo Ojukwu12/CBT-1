@@ -7,6 +7,7 @@ const express = require('express');
 const router = express.Router();
 const paymentController = require('../controllers/paymentController');
 const { verifyToken } = require('../middleware/auth.middleware');
+const { paymentInitializeLimiter, paymentVerifyLimiter, webhookLimiter } = require('../middleware/rateLimit.middleware');
 const validate = require('../middleware/validate.middleware');
 const {
   initializePaymentSchema,
@@ -49,6 +50,7 @@ router.get(
 router.post(
   '/initialize',
   verifyToken,
+  paymentInitializeLimiter,
   validate(initializePaymentSchema),
   paymentController.initializePayment
 );
@@ -62,6 +64,7 @@ router.post(
 router.post(
   '/verify',
   verifyToken,
+  paymentVerifyLimiter,
   validate(verifyPaymentSchema),
   paymentController.verifyPayment
 );
@@ -77,6 +80,19 @@ router.get(
   verifyToken,
   validate(getTransactionHistorySchema, 'query'),
   paymentController.getTransactionHistory
+);
+
+/**
+ * Webhook endpoint for Paystack callbacks
+ * POST /api/payments/webhook
+ * No authentication - verified by Paystack signature
+ * Headers: x-paystack-signature
+ * Body: { event, data }
+ */
+router.post(
+  '/webhook',
+  webhookLimiter,
+  paymentController.handleWebhook
 );
 
 module.exports = router;

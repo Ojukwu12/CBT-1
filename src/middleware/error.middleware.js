@@ -26,7 +26,7 @@ const handleMongooseError = (err) => {
       message: err.message,
       value: err.value,
     }));
-    return new ApiError(400, 'Database validation error', details);
+    return new ApiError(400, 'Validation error', details);
   }
 
   // Cast error (invalid ObjectId, etc.)
@@ -39,7 +39,7 @@ const handleMongooseError = (err) => {
   }
 
   // Generic mongoose error
-  return new ApiError(500, 'Database error');
+  return new ApiError(500, 'Database operation failed');
 };
 
 const errorHandler = (err, req, res, next) => {
@@ -77,10 +77,16 @@ const errorHandler = (err, req, res, next) => {
   }
 
   // Production: hide sensitive details
+  // Return generic message for 5xx errors to prevent information disclosure
+  const isClientError = statusCode >= 400 && statusCode < 500;
+  const productionMessage = isClientError ? message : 'Something went wrong. Please try again later.';
+
   res.status(statusCode).json({
     success: false,
     statusCode,
-    message: statusCode === 500 ? 'Internal server error' : message,
+    message: productionMessage,
+    // Include requestId for support team to track down issues
+    requestId: req.id,
     timestamp: new Date().toISOString(),
   });
 };
