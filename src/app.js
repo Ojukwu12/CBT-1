@@ -3,6 +3,7 @@ const cors = require('cors');
 const morgan = require('morgan');
 const helmet = require('helmet');
 const compression = require('compression');
+const cookieParser = require('cookie-parser');
 const { env } = require('./config/env');
 const ApiError = require('./utils/ApiError');
 const errorHandler = require('./middleware/error.middleware');
@@ -41,6 +42,7 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false,  // Allow cross-origin resources if needed
 }));
 app.use(compression());
+app.use(cookieParser());
 app.use(requestIdMiddleware);
 app.use(generalTimeout);  // Apply timeout to all requests (30s)
 app.use(generalLimiter);

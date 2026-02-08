@@ -12,13 +12,15 @@ const isAdmin = (req, res, next) => {
 	next();
 };
 
+router.use(verifyToken);
+
 router.get('/', questionController.listQuestions);
-router.post('/', verifyToken, isAdmin, questionController.createQuestion);
-router.get('/pending/:universityId', questionController.getPendingQuestions);
+router.post('/', isAdmin, questionController.createQuestion);
+router.get('/pending/:universityId', isAdmin, questionController.getPendingQuestions);
 router.get('/stats/:topicId', questionController.getQuestionStats);
 router.get('/random/:topicId', questionController.getRandomQuestions);
 router.get('/:topicId', questionController.getQuestionsByTopic);
-router.post('/approve/:questionId', questionController.approveQuestion);
-router.post('/reject/:questionId', questionController.rejectQuestion);
+router.post('/approve/:questionId', isAdmin, questionController.approveQuestion);
+router.post('/reject/:questionId', isAdmin, questionController.rejectQuestion);
 
 module.exports = router;

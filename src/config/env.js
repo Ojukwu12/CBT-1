@@ -10,6 +10,7 @@ const env = {
   AI_CACHE_HOURS: parseInt(process.env.AI_CACHE_HOURS || '24', 10),
   UNIVERSITY_ID: process.env.UNIVERSITY_ID || 'unizik',
   JWT_SECRET: process.env.JWT_SECRET,
+  REFRESH_TOKEN_SECRET: process.env.REFRESH_TOKEN_SECRET || process.env.JWT_SECRET,
   PAYSTACK_SECRET_KEY: process.env.PAYSTACK_SECRET_KEY,
   PAYSTACK_PUBLIC_KEY: process.env.PAYSTACK_PUBLIC_KEY,
   BREVO_API_KEY: process.env.BREVO_API_KEY,

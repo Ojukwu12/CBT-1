@@ -56,6 +56,20 @@ const userSchema = new mongoose.Schema(
       accuracy: { type: Number, default: 0 },
       topicsStudied: { type: Number, default: 0 },
     },
+    passwordResetTokenHash: {
+      type: String,
+      select: false,
+    },
+    passwordResetTokenExpiresAt: Date,
+    passwordResetOtpHash: {
+      type: String,
+      select: false,
+    },
+    passwordResetOtpExpiresAt: Date,
+    refreshTokenHash: {
+      type: String,
+      select: false,
+    },
   },
   { timestamps: true }
 );

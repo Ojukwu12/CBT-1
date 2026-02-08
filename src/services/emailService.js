@@ -233,6 +233,21 @@ class EmailService {
   }
 
   /**
+   * Password reset email (OTP + magic link)
+   */
+  async sendPasswordResetOptionsEmail(user, { otp, resetLink, expiresInMinutes }) {
+    return this.send(user.email, 'Reset your password', 'reset-password-options', {
+      firstName: user.firstName || 'User',
+      otp,
+      resetLink,
+      expiresInMinutes,
+      supportEmail: env.SUPPORT_EMAIL || 'support@universitycbt.com',
+      appUrl: env.APP_URL || this.baseUrl,
+      baseUrl: this.baseUrl,
+    });
+  }
+
+  /**
    * Question approved email (admin notification)
    */
   async sendQuestionApprovedEmail(admin, question, approver) {
