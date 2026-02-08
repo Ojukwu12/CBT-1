@@ -131,7 +131,7 @@ class ExamService {
     const wasNotCorrect = !oldData.isCorrect;
 
     examSession.questionsData[questionIndex] = {
-      ...oldData,
+      questionId: oldData.questionId,
       selectedAnswer,
       isCorrect,
       timeSpentSeconds: timeSpentSeconds || 0,
