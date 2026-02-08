@@ -22,7 +22,24 @@ const approveRejectSchema = Joi.object({
   notes: Joi.string().allow('').optional(),
 });
 
+const listQuestionsSchema = Joi.object({
+  universityId: Joi.string().regex(/^[0-9a-fA-F]{24}$/),
+  courseId: Joi.string().regex(/^[0-9a-fA-F]{24}$/),
+  departmentId: Joi.string().regex(/^[0-9a-fA-F]{24}$/),
+  topicId: Joi.string().regex(/^[0-9a-fA-F]{24}$/),
+  createdBy: Joi.string().regex(/^[0-9a-fA-F]{24}$/),
+  level: Joi.number().integer().valid(100, 200, 300, 400, 500, 600),
+  difficulty: Joi.string().valid('easy', 'medium', 'hard'),
+  status: Joi.string().valid('pending', 'approved', 'rejected'),
+  accessLevel: Joi.string().valid('free', 'basic', 'premium'),
+  source: Joi.string().valid('AI', 'Human'),
+  q: Joi.string().trim().min(1).max(200),
+  page: Joi.number().integer().min(1).max(1000).default(1),
+  limit: Joi.number().integer().min(1).max(100).default(20),
+});
+
 module.exports = {
   createQuestionSchema,
   approveRejectSchema,
+  listQuestionsSchema,
 };

@@ -20,6 +20,21 @@ const questionSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    departmentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Department',
+      index: true,
+    },
+    level: {
+      type: Number,
+      enum: [100, 200, 300, 400, 500, 600],
+      index: true,
+    },
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      index: true,
+    },
     text: {
       type: String,
       required: true,
@@ -85,6 +100,8 @@ const questionSchema = new mongoose.Schema(
 
 questionSchema.index({ universityId: 1, courseId: 1, topicId: 1 });
 questionSchema.index({ universityId: 1, status: 1, accessLevel: 1 });
+questionSchema.index({ universityId: 1, departmentId: 1, level: 1 });
+questionSchema.index({ createdBy: 1, status: 1 });
 questionSchema.index({ text: 'text' });
 
 module.exports = mongoose.model('Question', questionSchema);

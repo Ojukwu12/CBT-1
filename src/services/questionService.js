@@ -10,6 +10,36 @@ const createManyQuestions = async (questionsData) => {
   return await Question.insertMany(questionsData, { ordered: false });
 };
 
+const listQuestions = async (filters = {}, options = {}) => {
+  const { page = 1, limit = 20, q } = options;
+  const query = { ...filters };
+
+  if (q) {
+    query.$text = { $search: q };
+  }
+
+  const skip = (page - 1) * limit;
+
+  const [data, total] = await Promise.all([
+    Question.find(query)
+      .select('-correctAnswer -__v')
+      .sort(q ? { score: { $meta: 'textScore' } } : { createdAt: -1 })
+      .skip(skip)
+      .limit(limit),
+    Question.countDocuments(query),
+  ]);
+
+  return {
+    data,
+    pagination: {
+      total,
+      page,
+      limit,
+      pages: Math.ceil(total / limit) || 1,
+    },
+  };
+};
+
 const getQuestionById = async (id) => {
   const question = await Question.findById(id)
     .populate('universityId')
@@ -143,6 +173,7 @@ const getQuestionStats = async (topicId) => {
 module.exports = {
   createQuestion,
   createManyQuestions,
+  listQuestions,
   getQuestionById,
   getQuestionsByTopic,
   getRandomQuestions,
