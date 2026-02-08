@@ -3,7 +3,7 @@ require('dotenv').config();
 const env = {
   PORT: process.env.PORT || 3000,
   MONGO_URI: process.env.MONGO_URI,
-  NODE_ENV: process.env.NODE_ENV || 'development',
+  NODE_ENV: process.env.NODE_ENV || (process.env.RENDER ? 'production' : 'development'),
   GEMINI_API_KEY: process.env.GEMINI_API_KEY,
   AI_ENABLED: process.env.AI_ENABLED !== 'false',
   AI_DAILY_LIMIT: parseInt(process.env.AI_DAILY_LIMIT || '50', 10),

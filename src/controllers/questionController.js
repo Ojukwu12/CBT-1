@@ -2,12 +2,25 @@ const questionService = require('../services/questionService');
 const topicService = require('../services/topicService');
 const asyncHandler = require('../utils/asyncHandler');
 const validate = require('../middleware/validate.middleware');
-const { approveRejectSchema } = require('../validators/question.validator');
+const { approveRejectSchema, createQuestionSchema } = require('../validators/question.validator');
 const emailService = require('../services/emailService');
 const User = require('../models/User');
 const Logger = require('../utils/logger');
 
 const logger = new Logger('QuestionController');
+
+const createQuestion = [
+  validate(createQuestionSchema),
+  asyncHandler(async (req, res) => {
+    const question = await questionService.createQuestion(req.body);
+
+    res.status(201).json({
+      success: true,
+      data: question,
+      message: 'Question created successfully',
+    });
+  })
+];
 
 const getQuestionsByTopic = asyncHandler(async (req, res) => {
   const { topicId } = req.params;
@@ -133,6 +146,7 @@ const getQuestionStats = asyncHandler(async (req, res) => {
 });
 
 module.exports = {
+  createQuestion,
   getQuestionsByTopic,
   getRandomQuestions,
   getPendingQuestions,

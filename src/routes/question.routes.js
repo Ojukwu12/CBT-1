@@ -3,6 +3,7 @@ const questionController = require('../controllers/questionController');
 
 const router = express.Router({ mergeParams: true });
 
+router.post('/', questionController.createQuestion);
 router.get('/pending/:universityId', questionController.getPendingQuestions);
 router.get('/stats/:topicId', questionController.getQuestionStats);
 router.get('/random/:topicId', questionController.getRandomQuestions);
