@@ -4,20 +4,44 @@
  * Different timeout for different operations
  */
 
-const timeout = require('connect-timeout');
 const ApiError = require('../utils/ApiError');
+
+const createTimeout = (ms) => (req, res, next) => {
+  let finished = false;
+
+  const done = () => {
+    if (finished) {
+      return;
+    }
+    finished = true;
+    clearTimeout(timer);
+  };
+
+  res.on('finish', done);
+  res.on('close', done);
+
+  const timer = setTimeout(() => {
+    if (finished) {
+      return;
+    }
+    req.timedout = true;
+    next();
+  }, ms);
+
+  next();
+};
 
 /**
  * General timeout: 30 seconds for most requests
  * Applies to all endpoints by default
  */
-const generalTimeout = timeout('30s');
+const generalTimeout = createTimeout(30 * 1000);
 
 /**
  * Long operation timeout: 60 seconds for file uploads/processing
  * Used for endpoints that might take longer
  */
-const longOperationTimeout = timeout('60s');
+const longOperationTimeout = createTimeout(60 * 1000);
 
 /**
  * Timeout error handler middleware

@@ -69,6 +69,15 @@ app.use(cors({
 
 app.use(morgan('dev'));
 
+// Root route (service status)
+app.get('/', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'CBT backend is running',
+    timestamp: new Date().toISOString(),
+  });
+});
+
 // Routes
 app.use('/api/health', healthRoutes);
 app.use('/api/auth', authRoutes);
