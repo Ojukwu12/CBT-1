@@ -279,32 +279,40 @@ class ExamService {
       throw new ApiError(403, 'You do not have permission to view this exam');
     }
 
-    // Populate question details (best-effort)
-    try {
-      await examSession.populate('questionsData.questionId', 'text options correctAnswer difficulty');
-    } catch (err) {
-      // Continue without populated question details
-    }
-
     const attempts = Array.isArray(examSession.questionsData)
       ? examSession.questionsData
       : [];
 
-    const questionResults = attempts.map((attempt) => {
-      const question = attempt.questionId;
+    const questionIds = attempts
+      .map((attempt) => attempt?.questionId)
+      .filter(Boolean)
+      .map((id) => id.toString());
 
-      return {
-        questionId: question?._id || attempt.questionId,
-        text: question?.text || '[Question no longer available]',
-        options: question?.options || {},
-        difficulty: question?.difficulty || null,
-        selectedAnswer: attempt.selectedAnswer,
-        correctAnswer: question?.correctAnswer || null,
-        isCorrect: attempt.isCorrect,
-        timeSpentSeconds: attempt.timeSpentSeconds,
-        feedbackColor: attempt.isCorrect ? 'green' : 'red'
-      };
-    });
+    const questions = await Question.find({ _id: { $in: questionIds } })
+      .select('text options correctAnswer difficulty');
+
+    const questionMap = new Map(
+      questions.map((q) => [q._id.toString(), q])
+    );
+
+    const questionResults = attempts
+      .filter(Boolean)
+      .map((attempt) => {
+        const attemptId = attempt.questionId?.toString?.() || String(attempt.questionId);
+        const question = questionMap.get(attemptId);
+
+        return {
+          questionId: attemptId,
+          text: question?.text || '[Question no longer available]',
+          options: question?.options || {},
+          difficulty: question?.difficulty || null,
+          selectedAnswer: attempt.selectedAnswer,
+          correctAnswer: question?.correctAnswer || null,
+          isCorrect: attempt.isCorrect,
+          timeSpentSeconds: attempt.timeSpentSeconds,
+          feedbackColor: attempt.isCorrect ? 'green' : 'red'
+        };
+      });
 
     return {
       examSessionId: examSession._id,
