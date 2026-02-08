@@ -282,17 +282,21 @@ class ExamService {
     // Populate question details
     await examSession.populate('questionsData.questionId', 'text options correctAnswer difficulty');
 
-    const questionResults = examSession.questionsData.map(attempt => ({
-      questionId: attempt.questionId._id,
-      text: attempt.questionId.text,
-      options: attempt.questionId.options,
-      difficulty: attempt.questionId.difficulty,
-      selectedAnswer: attempt.selectedAnswer,
-      correctAnswer: attempt.questionId.correctAnswer,
-      isCorrect: attempt.isCorrect,
-      timeSpentSeconds: attempt.timeSpentSeconds,
-      feedbackColor: attempt.isCorrect ? 'green' : 'red'
-    }));
+    const questionResults = examSession.questionsData.map((attempt) => {
+      const question = attempt.questionId;
+
+      return {
+        questionId: question?._id || attempt.questionId,
+        text: question?.text || '[Question no longer available]',
+        options: question?.options || {},
+        difficulty: question?.difficulty || null,
+        selectedAnswer: attempt.selectedAnswer,
+        correctAnswer: question?.correctAnswer || null,
+        isCorrect: attempt.isCorrect,
+        timeSpentSeconds: attempt.timeSpentSeconds,
+        feedbackColor: attempt.isCorrect ? 'green' : 'red'
+      };
+    });
 
     return {
       examSessionId: examSession._id,
