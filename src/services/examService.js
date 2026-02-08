@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const ExamSession = require('../models/ExamSession');
 const Question = require('../models/Question');
 const UserAnalytics = require('../models/UserAnalytics');
@@ -28,11 +29,11 @@ class ExamService {
     };
 
     if (courseId) {
-      query.courseId = courseId;
+      query.courseId = new mongoose.Types.ObjectId(courseId);
     }
 
     if (topicIds.length > 0) {
-      query.topicId = { $in: topicIds };
+      query.topicId = { $in: topicIds.map((id) => new mongoose.Types.ObjectId(id)) };
     }
 
     // Apply tier-based access control
