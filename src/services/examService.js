@@ -284,7 +284,7 @@ class ExamService {
       : [];
 
     const questionIds = attempts
-      .map((attempt) => attempt?.questionId)
+      .map((attempt) => attempt?.questionId?._id || attempt?.questionId)
       .filter(Boolean)
       .map((id) => id.toString());
 
@@ -298,7 +298,10 @@ class ExamService {
     const questionResults = attempts
       .filter(Boolean)
       .map((attempt) => {
-        const attemptId = attempt.questionId?.toString?.() || String(attempt.questionId);
+        const attemptId =
+          attempt?.questionId?._id?.toString?.() ||
+          attempt?.questionId?.toString?.() ||
+          null;
         const question = questionMap.get(attemptId);
 
         return {
