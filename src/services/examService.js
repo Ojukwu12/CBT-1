@@ -279,10 +279,18 @@ class ExamService {
       throw new ApiError(403, 'You do not have permission to view this exam');
     }
 
-    // Populate question details
-    await examSession.populate('questionsData.questionId', 'text options correctAnswer difficulty');
+    // Populate question details (best-effort)
+    try {
+      await examSession.populate('questionsData.questionId', 'text options correctAnswer difficulty');
+    } catch (err) {
+      // Continue without populated question details
+    }
 
-    const questionResults = examSession.questionsData.map((attempt) => {
+    const attempts = Array.isArray(examSession.questionsData)
+      ? examSession.questionsData
+      : [];
+
+    const questionResults = attempts.map((attempt) => {
       const question = attempt.questionId;
 
       return {
