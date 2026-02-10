@@ -22,6 +22,11 @@ const aiGenerationLogSchema = new mongoose.Schema(
       enum: ['pending', 'success', 'failed'],
       default: 'pending',
     },
+    difficulty: {
+      type: String,
+      enum: ['easy', 'medium', 'hard', 'mixed'],
+      default: 'mixed',
+    },
     errorMessage: String,
     generatedQuestionIds: [
       {
@@ -35,7 +40,7 @@ const aiGenerationLogSchema = new mongoose.Schema(
     executionTime: Number,
     initiatedBy: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Admin',
+      ref: 'User',
       required: true,
     },
   },

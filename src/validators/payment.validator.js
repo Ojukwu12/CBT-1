@@ -2,10 +2,10 @@ const Joi = require('joi');
 
 const initializePaymentSchema = Joi.object({
   plan: Joi.string()
-    .valid('free', 'basic', 'premium')
+    .valid('basic', 'premium')
     .required()
     .messages({
-      'any.only': 'Plan must be one of: free, basic, premium',
+      'any.only': 'Plan must be one of: basic, premium',
       'any.required': 'Plan is required',
     }),
 });

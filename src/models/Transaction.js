@@ -38,7 +38,7 @@ const transactionSchema = new mongoose.Schema(
     },
     planExpiryDate: {
       type: Date,
-      required: true,
+      required: false,
     },
     status: {
       type: String,

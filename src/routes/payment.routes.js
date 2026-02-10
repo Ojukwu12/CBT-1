@@ -33,6 +33,7 @@ router.get('/plans', paymentController.getPlans);
  */
 router.get(
   '/status/:reference',
+  verifyToken,
   validate(checkPaymentStatusSchema, 'params'),
   paymentController.checkPaymentStatus
 );

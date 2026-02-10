@@ -91,14 +91,13 @@ class LeaderboardService {
     const analytics = await UserAnalytics.find({ totalExamsCompleted: { $gt: 0 } })
       .sort({ averageScore: -1 })
       .limit(1000)
-      .populate('userId', 'firstName lastName email');
+      .populate('userId', 'firstName lastName');
 
     const rankings = analytics.map((a, index) => ({
       rank: index + 1,
       userId: a.userId._id,
       firstName: a.userId.firstName,
       lastName: a.userId.lastName,
-      email: a.userId.email,
       score: a.averageScore,
       examsCompleted: a.totalExamsCompleted,
       accuracy: a.accuracyRate,
@@ -123,14 +122,13 @@ class LeaderboardService {
     const analytics = await UserAnalytics.find({ userId: { $in: userIds }, totalExamsCompleted: { $gt: 0 } })
       .sort({ averageScore: -1 })
       .limit(1000)
-      .populate('userId', 'firstName lastName email');
+      .populate('userId', 'firstName lastName');
 
     const rankings = analytics.map((a, index) => ({
       rank: index + 1,
       userId: a.userId._id,
       firstName: a.userId.firstName,
       lastName: a.userId.lastName,
-      email: a.userId.email,
       score: a.averageScore,
       examsCompleted: a.totalExamsCompleted,
       accuracy: a.accuracyRate,
@@ -155,14 +153,13 @@ class LeaderboardService {
     })
       .sort({ averageScore: -1 })
       .limit(1000)
-      .populate('userId', 'firstName lastName email');
+      .populate('userId', 'firstName lastName');
 
     const rankings = analytics.map((a, index) => ({
       rank: index + 1,
       userId: a.userId._id,
       firstName: a.userId.firstName,
       lastName: a.userId.lastName,
-      email: a.userId.email,
       score: a.averageScore,
       examsCompleted: a.totalExamsCompleted,
       accuracy: a.accuracyRate,
@@ -193,14 +190,13 @@ class LeaderboardService {
     })
       .sort({ averageScore: -1 })
       .limit(1000)
-      .populate('userId', 'firstName lastName email');
+      .populate('userId', 'firstName lastName');
 
     const rankings = analytics.map((a, index) => ({
       rank: index + 1,
       userId: a.userId._id,
       firstName: a.userId.firstName,
       lastName: a.userId.lastName,
-      email: a.userId.email,
       score: a.averageScore,
       examsCompleted: a.totalExamsCompleted,
       accuracy: a.accuracyRate,

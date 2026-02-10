@@ -101,6 +101,10 @@ const verifyPayment = asyncHandler(async (req, res) => {
     throw new ApiError(404, 'Transaction not found');
   }
 
+  if (existingTransaction.userId.toString() !== userId) {
+    throw new ApiError(403, 'You do not have permission to verify this payment');
+  }
+
   if (existingTransaction.status === 'success') {
     // Payment already processed - return existing data
     logger.warn(`Payment already processed: ${reference}`);
@@ -293,6 +297,10 @@ const checkPaymentStatus = asyncHandler(async (req, res) => {
     throw new ApiError(404, 'Transaction not found');
   }
 
+  if (req.user.role !== 'admin' && transaction.userId.toString() !== req.user.id) {
+    throw new ApiError(403, 'You do not have permission to view this transaction');
+  }
+
   res.status(200).json(
     new ApiResponse(200, transaction, 'Payment status retrieved')
   );
@@ -313,7 +321,7 @@ const handleWebhook = asyncHandler(async (req, res) => {
   }
 
   // Verify webhook signature (primary security)
-  const isValid = paystackService.verifyWebhookSignature(req.body, signature);
+  const isValid = paystackService.verifyWebhookSignature(req.body, signature, req.rawBody);
   if (!isValid) {
     logger.warn(`Webhook rejected: Invalid signature from IP ${clientIP}`);
     throw new ApiError(401, 'Invalid webhook signature');

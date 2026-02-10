@@ -4,6 +4,7 @@ const morgan = require('morgan');
 const helmet = require('helmet');
 const compression = require('compression');
 const cookieParser = require('cookie-parser');
+const path = require('path');
 const { env } = require('./config/env');
 const ApiError = require('./utils/ApiError');
 const errorHandler = require('./middleware/error.middleware');
@@ -36,8 +37,6 @@ const app = express();
 
 // Security & Performance middleware
 app.use(helmet({
-  // Enable CSRF protection for form submissions
-  csrfProtection: true,
   // Additional security headers
   crossOriginEmbedderPolicy: false,  // Allow cross-origin resources if needed
 }));
@@ -48,7 +47,12 @@ app.use(generalTimeout);  // Apply timeout to all requests (30s)
 app.use(generalLimiter);
 
 // Body parsers with size limits
-app.use(express.json({ limit: '50mb' }));
+app.use(express.json({
+  limit: '50mb',
+  verify: (req, res, buf) => {
+    req.rawBody = buf;
+  }
+}));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // CORS configuration with origin whitelist
@@ -70,6 +74,9 @@ app.use(cors({
 }));
 
 app.use(morgan('dev'));
+
+// Serve local uploads when STORAGE_PROVIDER=local
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 // Root route (service status)
 app.get('/', (req, res) => {

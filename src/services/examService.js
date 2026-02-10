@@ -7,8 +7,52 @@ const Topic = require('../models/Topic');
 const User = require('../models/User');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
+const { env } = require('../config/env');
 
 class ExamService {
+  static getResultDelayMinutes() {
+    const delay = parseInt(env.EXAM_RESULT_DELAY_MINUTES || 0, 10);
+    return Number.isNaN(delay) ? 0 : Math.max(0, delay);
+  }
+
+  static async finalizeExpiredExam(examSession) {
+    if (!examSession || examSession.status !== 'in_progress') {
+      return null;
+    }
+
+    const score = examSession.calculateScore();
+    const delayMinutes = ExamService.getResultDelayMinutes();
+    const resultsAvailableAt = delayMinutes > 0
+      ? new Date(Date.now() + delayMinutes * 60 * 1000)
+      : new Date();
+
+    const updated = await ExamSession.findOneAndUpdate(
+      { _id: examSession._id, status: 'in_progress' },
+      {
+        $set: {
+          score,
+          percentage: score,
+          status: 'submitted',
+          submittedAt: new Date(),
+          resultsAvailableAt,
+          isPassed: score >= (examSession.passingScore || 70)
+        }
+      },
+      { new: true }
+    );
+
+    if (!updated) {
+      return null;
+    }
+
+    let analytics = await UserAnalytics.findOne({ userId: updated.userId });
+    if (!analytics) {
+      analytics = new UserAnalytics({ userId: updated.userId });
+    }
+
+    await analytics.updateStats(updated);
+    return updated;
+  }
   /**
    * Start a new exam session
    * @param {string} userId - User ID
@@ -21,6 +65,16 @@ class ExamService {
     // Verify user exists and check tier access
     const user = await User.findById(userId);
     if (!user) throw new ApiError(404, 'User not found');
+
+    if (!user.isActive) {
+      throw new ApiError(403, 'Account is deactivated');
+    }
+
+    if (user.plan !== 'free' && user.planExpiresAt && new Date() > user.planExpiresAt) {
+      user.plan = 'free';
+      user.planExpiresAt = null;
+      await user.save();
+    }
 
     // Build query for questions
     const query = {
@@ -97,16 +151,21 @@ class ExamService {
    * @param {number} timeSpentSeconds - Time spent on this question
    * @returns {Promise<object>} Answer submission response
    */
-  static async submitAnswer(examSessionId, questionId, selectedAnswer, timeSpentSeconds = 0) {
+  static async submitAnswer(examSessionId, userId, questionId, selectedAnswer, timeSpentSeconds = 0) {
     const examSession = await ExamSession.findById(examSessionId);
     if (!examSession) throw new ApiError(404, 'Exam session not found');
+
+    if (examSession.userId.toString() !== userId) {
+      throw new ApiError(403, 'You do not have permission to submit this exam');
+    }
 
     if (examSession.status !== 'in_progress') {
       throw new ApiError(400, 'Exam is not in progress');
     }
 
     if (examSession.isExpired) {
-      throw new ApiError(400, 'Exam time has expired');
+      await ExamService.finalizeExpiredExam(examSession);
+      throw new ApiError(400, 'Exam time has expired and was submitted');
     }
 
     // Get question and verify it exists
@@ -128,7 +187,7 @@ class ExamService {
     // Update question attempt data
     const oldData = examSession.questionsData[questionIndex];
     const wasNotAnswered = !oldData.selectedAnswer;
-    const wasNotCorrect = !oldData.isCorrect;
+    const wasCorrect = oldData.isCorrect === true;
 
     examSession.questionsData[questionIndex] = {
       questionId: oldData.questionId,
@@ -148,12 +207,14 @@ class ExamService {
       }
     };
 
-    // Only increment counters if conditions are met
+    // Only increment or decrement counters if conditions are met
     if (wasNotAnswered) {
       updateOps.$inc.answeredQuestions = 1;
     }
-    if (isCorrect && wasNotCorrect) {
+    if (isCorrect && !wasCorrect) {
       updateOps.$inc.correctAnswers = 1;
+    } else if (!isCorrect && wasCorrect) {
+      updateOps.$inc.correctAnswers = -1;
     }
 
     await ExamSession.findByIdAndUpdate(examSessionId, updateOps, { new: true });
@@ -181,8 +242,8 @@ class ExamService {
       questionId,
       isCorrect,
       feedback: isCorrect ? 'Correct!' : `The correct answer is ${question.correctAnswer}`,
-      answeredQuestions: examSession.answeredQuestions,
-      correctAnswers: examSession.correctAnswers
+      answeredQuestions: updatedExamSession.answeredQuestions,
+      correctAnswers: updatedExamSession.correctAnswers
     };
   }
 
@@ -191,9 +252,31 @@ class ExamService {
    * @param {string} examSessionId - Exam session ID
    * @returns {Promise<object>} Exam summary
    */
-  static async getExamSummary(examSessionId) {
+  static async getExamSummary(examSessionId, userId) {
     const examSession = await ExamSession.findById(examSessionId);
     if (!examSession) throw new ApiError(404, 'Exam session not found');
+
+    if (examSession.userId.toString() !== userId) {
+      throw new ApiError(403, 'You do not have permission to view this exam');
+    }
+
+    if (examSession.status === 'in_progress' && examSession.isExpired) {
+      const updated = await ExamService.finalizeExpiredExam(examSession);
+      if (updated) {
+        return {
+          examSessionId: updated._id,
+          status: updated.status,
+          totalQuestions: updated.totalQuestions,
+          answeredQuestions: updated.answeredQuestions,
+          correctAnswers: updated.correctAnswers,
+          remainingTimeSeconds: 0,
+          isExpired: true,
+          startedAt: updated.startedAt,
+          submittedAt: updated.submittedAt,
+          resultsAvailableAt: updated.resultsAvailableAt
+        };
+      }
+    }
 
     return {
       examSessionId: examSession._id,
@@ -204,7 +287,8 @@ class ExamService {
       remainingTimeSeconds: examSession.remainingTimeSeconds,
       isExpired: examSession.isExpired,
       startedAt: examSession.startedAt,
-      submittedAt: examSession.submittedAt
+      submittedAt: examSession.submittedAt,
+      resultsAvailableAt: examSession.resultsAvailableAt
     };
   }
 
@@ -213,9 +297,13 @@ class ExamService {
    * @param {string} examSessionId - Exam session ID
    * @returns {Promise<object>} Final exam results
    */
-  static async submitExam(examSessionId) {
+  static async submitExam(examSessionId, userId) {
     const examSession = await ExamSession.findById(examSessionId);
     if (!examSession) throw new ApiError(404, 'Exam session not found');
+
+    if (examSession.userId.toString() !== userId) {
+      throw new ApiError(403, 'You do not have permission to submit this exam');
+    }
 
     if (examSession.status !== 'in_progress') {
       throw new ApiError(400, `Exam is ${examSession.status}. Cannot submit again.`);
@@ -224,6 +312,10 @@ class ExamService {
     // Calculate final score
     const score = examSession.calculateScore();
     const percentage = score;
+    const delayMinutes = ExamService.getResultDelayMinutes();
+    const resultsAvailableAt = delayMinutes > 0
+      ? new Date(Date.now() + delayMinutes * 60 * 1000)
+      : new Date();
     
     // Use atomic update to prevent race condition (double submission)
     const updatedExamSession = await ExamSession.findOneAndUpdate(
@@ -237,6 +329,7 @@ class ExamService {
           percentage,
           status: 'submitted',
           submittedAt: new Date(),
+          resultsAvailableAt,
           isPassed: percentage >= (examSession.passingScore || 70)
         }
       },
@@ -260,7 +353,8 @@ class ExamService {
       score: updatedExamSession.score,
       percentage: updatedExamSession.percentage,
       isPassed: updatedExamSession.isPassed,
-      summary: updatedExamSession.getPerformanceSummary()
+      summary: updatedExamSession.getPerformanceSummary(),
+      resultsAvailableAt: updatedExamSession.resultsAvailableAt
     };
   }
 
@@ -277,6 +371,12 @@ class ExamService {
     // Verify user owns this exam
     if (examSession.userId.toString() !== userId) {
       throw new ApiError(403, 'You do not have permission to view this exam');
+    }
+
+    if (examSession.resultsAvailableAt && examSession.resultsAvailableAt.getTime() > Date.now()) {
+      throw new ApiError(425, 'Exam results are not available yet', {
+        resultsAvailableAt: examSession.resultsAvailableAt
+      });
     }
 
     const attempts = Array.isArray(examSession.questionsData)
@@ -329,6 +429,7 @@ class ExamService {
       timeSpent: `${Math.floor(examSession.timeSpentSeconds / 60)}:${(examSession.timeSpentSeconds % 60).toString().padStart(2, '0')}`,
       startedAt: examSession.startedAt,
       submittedAt: examSession.submittedAt,
+      resultsAvailableAt: examSession.resultsAvailableAt,
       questions: questionResults
     };
   }
@@ -382,13 +483,7 @@ class ExamService {
     if (!examSession) return null;
 
     if (examSession.isExpired) {
-      // Auto-submit expired exam
-      examSession.status = 'submitted';
-      examSession.submittedAt = new Date();
-      examSession.score = examSession.calculateScore();
-      examSession.percentage = examSession.score;
-      examSession.markAsPassed();
-      await examSession.save();
+      await ExamService.finalizeExpiredExam(examSession);
       return null;
     }
 
@@ -398,7 +493,8 @@ class ExamService {
       totalQuestions: examSession.totalQuestions,
       answeredQuestions: examSession.answeredQuestions,
       remainingTimeSeconds: examSession.remainingTimeSeconds,
-      startedAt: examSession.startedAt
+      startedAt: examSession.startedAt,
+      resultsAvailableAt: examSession.resultsAvailableAt
     };
   }
 

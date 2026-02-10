@@ -129,20 +129,20 @@ const approveQuestion = async (questionId, adminId, notes = '') => {
 };
 
 const rejectQuestion = async (questionId, adminId, notes = '') => {
-  const question = await Question.findByIdAndUpdate(
-    questionId,
-    {
-      status: 'rejected',
-      approvedBy: adminId,
-      approvalNotes: notes,
-    },
-    { new: true }
-  );
+  const question = await Question.findByIdAndDelete(questionId);
 
   if (!question) {
     throw new ApiError(404, 'Question not found');
   }
 
+  return question;
+};
+
+const deleteQuestion = async (questionId) => {
+  const question = await Question.findByIdAndDelete(questionId);
+  if (!question) {
+    throw new ApiError(404, 'Question not found');
+  }
   return question;
 };
 
@@ -180,6 +180,7 @@ module.exports = {
   getQuestionsByTopicAndDifficulty,
   approveQuestion,
   rejectQuestion,
+  deleteQuestion,
   getPendingQuestions,
   getQuestionStats,
 };

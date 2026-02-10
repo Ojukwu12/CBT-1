@@ -1,12 +1,15 @@
 const Joi = require('joi');
 
-const analyticsParamsSchema = Joi.object({
+const topicParamsSchema = Joi.object({
   topicId: Joi.string()
     .regex(/^[0-9a-fA-F]{24}$/)
     .required()
     .messages({
       'string.pattern.base': 'Invalid topic ID format'
-    }),
+    })
+});
+
+const courseParamsSchema = Joi.object({
   courseId: Joi.string()
     .regex(/^[0-9a-fA-F]{24}$/)
     .required()
@@ -37,7 +40,8 @@ const monthlyStatsSchema = Joi.object({
 });
 
 module.exports = {
-  analyticsParamsSchema,
+  topicParamsSchema,
+  courseParamsSchema,
   trendsQuerySchema,
   monthlyStatsSchema
 };

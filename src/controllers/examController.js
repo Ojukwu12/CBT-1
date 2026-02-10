@@ -34,6 +34,7 @@ class ExamController {
 
     const result = await ExamService.submitAnswer(
       examSessionId,
+      req.user.id,
       questionId,
       selectedAnswer,
       timeSpentSeconds
@@ -51,7 +52,7 @@ class ExamController {
   static getExamSummary = asyncHandler(async (req, res) => {
     const { examSessionId } = req.params;
 
-    const result = await ExamService.getExamSummary(examSessionId);
+    const result = await ExamService.getExamSummary(examSessionId, req.user.id);
 
     res.status(200).json(
       new ApiResponse(200, result, 'Exam summary retrieved')
@@ -65,7 +66,7 @@ class ExamController {
   static submitExam = asyncHandler(async (req, res) => {
     const { examSessionId } = req.params;
 
-    const result = await ExamService.submitExam(examSessionId);
+    const result = await ExamService.submitExam(examSessionId, req.user.id);
 
     res.status(200).json(
       new ApiResponse(200, result, 'Exam submitted successfully')

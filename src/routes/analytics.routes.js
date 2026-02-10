@@ -3,7 +3,8 @@ const analyticsController = require('../controllers/analyticsController');
 const { verifyToken } = require('../middleware/auth.middleware');
 const validate = require('../middleware/validate.middleware');
 const {
-  analyticsParamsSchema,
+  topicParamsSchema,
+  courseParamsSchema,
   trendsQuerySchema,
   monthlyStatsSchema
 } = require('../validators/analytics.validator');
@@ -28,7 +29,7 @@ router.get('/dashboard', analyticsController.getDashboard);
  */
 router.get(
   '/topic/:topicId',
-  validate(analyticsParamsSchema, 'params'),
+  validate(topicParamsSchema, 'params'),
   analyticsController.getTopicAnalytics
 );
 
@@ -40,7 +41,7 @@ router.get(
  */
 router.get(
   '/course/:courseId',
-  validate(analyticsParamsSchema, 'params'),
+  validate(courseParamsSchema, 'params'),
   analyticsController.getCourseAnalytics
 );
 

@@ -1,3 +1,4 @@
+const bcrypt = require('bcryptjs');
 const userService = require('../services/userService');
 const asyncHandler = require('../utils/asyncHandler');
 const validate = require('../middleware/validate.middleware');
@@ -6,13 +7,16 @@ const { createUserSchema, upgradePlanSchema, downgradePlanSchema } = require('..
 const createUser = [
   validate(createUserSchema),
   asyncHandler(async (req, res) => {
-    const { email, firstName, lastName, universityId } = req.body;
+    const { email, firstName, lastName, universityId, password } = req.body;
+
+    const hashedPassword = await bcrypt.hash(password, 10);
 
     const user = await userService.createUser({
       email,
       firstName,
       lastName,
       universityId,
+      password: hashedPassword,
       plan: 'free',
       role: 'student',
     });

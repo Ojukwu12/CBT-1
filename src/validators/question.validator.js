@@ -10,9 +10,9 @@ const createQuestionSchema = Joi.object({
   }).required(),
   correctAnswer: Joi.string().valid('A','B','C','D').required(),
   difficulty: Joi.string().valid('easy','medium','hard').required(),
-  source: Joi.string().valid('AI','Human').required(),
-  accessLevel: Joi.string().valid('free','basic','premium').required(),
-  universityId: Joi.string().required(),
+  source: Joi.string().valid('AI','Human').optional(),
+  accessLevel: Joi.string().valid('free','basic','premium').optional(),
+  universityId: Joi.string().optional(),
   courseId: Joi.string().required(),
   topicId: Joi.string().required(),
 });
@@ -38,8 +38,13 @@ const listQuestionsSchema = Joi.object({
   limit: Joi.number().integer().min(1).max(100).default(20),
 });
 
+const questionIdSchema = Joi.object({
+  questionId: Joi.string().regex(/^[0-9a-fA-F]{24}$/).required(),
+});
+
 module.exports = {
   createQuestionSchema,
   approveRejectSchema,
   listQuestionsSchema,
+  questionIdSchema,
 };

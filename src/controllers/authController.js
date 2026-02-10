@@ -40,6 +40,9 @@ const register = asyncHandler(async (req, res, next) => {
   // Hash password
   const hashedPassword = await bcrypt.hash(password, 10);
 
+  const verifyToken = crypto.randomBytes(32).toString('hex');
+  const verifyTokenExpiresAt = new Date(Date.now() + (env.EMAIL_VERIFICATION_TOKEN_TTL_MINUTES || 60) * 60 * 1000);
+
   // Create user
   const user = new User({
     firstName,
@@ -50,9 +53,23 @@ const register = asyncHandler(async (req, res, next) => {
     role: 'student',
     plan: 'free',
     isActive: true,
+    emailVerificationTokenHash: hashValue(verifyToken),
+    emailVerificationTokenExpiresAt: verifyTokenExpiresAt,
   });
 
   await user.save();
+
+  const verifyLink = `${env.BASE_URL || 'http://localhost:3000'}/api/auth/verify-email?token=${verifyToken}&email=${encodeURIComponent(email)}`;
+
+  // Send verification email
+  try {
+    await emailService.sendEmailVerificationLink(user, {
+      verifyLink,
+      expiresInMinutes: env.EMAIL_VERIFICATION_TOKEN_TTL_MINUTES || 60,
+    });
+  } catch (err) {
+    logger.error('Verification email failed:', err);
+  }
 
   // Send welcome email
   try {
@@ -81,6 +98,7 @@ const register = asyncHandler(async (req, res, next) => {
         email: user.email,
         role: user.role,
         plan: user.plan,
+        emailVerifiedAt: user.emailVerifiedAt,
       },
       token,
       expiresIn: '7 days',
@@ -150,6 +168,7 @@ const login = asyncHandler(async (req, res, next) => {
         role: user.role,
         plan: user.plan,
         planExpiresAt: user.planExpiresAt,
+        emailVerifiedAt: user.emailVerifiedAt,
       },
       token,
       expiresIn: '7 days',
@@ -260,6 +279,43 @@ const verifyResetToken = asyncHandler(async (req, res, next) => {
 });
 
 /**
+ * Verify email (magic link)
+ * GET /api/auth/verify-email?email=...&token=...
+ */
+const verifyEmail = asyncHandler(async (req, res, next) => {
+  const { email, token } = req.query;
+
+  const user = await User.findOne({ email }).select('+emailVerificationTokenHash');
+  if (!user) {
+    return next(new ApiError(404, 'User not found'));
+  }
+
+  if (user.emailVerifiedAt) {
+    return res.status(200).json(
+      new ApiResponse(200, { email }, 'Email already verified')
+    );
+  }
+
+  const now = Date.now();
+  if (!user.emailVerificationTokenHash || !user.emailVerificationTokenExpiresAt || user.emailVerificationTokenExpiresAt.getTime() <= now) {
+    return next(new ApiError(400, 'Verification link expired'));
+  }
+
+  if (hashValue(token) !== user.emailVerificationTokenHash) {
+    return next(new ApiError(400, 'Invalid verification token'));
+  }
+
+  user.emailVerifiedAt = new Date();
+  user.emailVerificationTokenHash = undefined;
+  user.emailVerificationTokenExpiresAt = undefined;
+  await user.save();
+
+  res.status(200).json(
+    new ApiResponse(200, { email }, 'Email verified successfully')
+  );
+});
+
+/**
  * Refresh access token
  * POST /api/auth/refresh
  */
@@ -354,6 +410,7 @@ module.exports = {
   forgotPassword,
   resetPassword,
   verifyResetToken,
+  verifyEmail,
   refreshToken,
   logout,
 };

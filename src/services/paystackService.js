@@ -255,12 +255,13 @@ class PaystackService {
    * Verify webhook signature from Paystack
    * Paystack sends this in the x-paystack-signature header
    */
-  verifyWebhookSignature(body, signature) {
+  verifyWebhookSignature(body, signature, rawBody = null) {
     try {
       const crypto = require('crypto');
+      const payload = rawBody ? rawBody : Buffer.from(JSON.stringify(body));
       const hash = crypto
         .createHmac('sha512', this.secretKey)
-        .update(JSON.stringify(body))
+        .update(payload)
         .digest('hex');
       
       const isValid = hash === signature;

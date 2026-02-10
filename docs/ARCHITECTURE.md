@@ -1,401 +1,96 @@
-# 🏗️ PHASE 0 ARCHITECTURE DOCUMENTATION
+# Architecture
 
-## System Overview
+This backend is a modular Node.js/Express service for a university CBT platform with AI-assisted question generation. It follows a strict controller/service separation, centralized validation, and a global error handler.
 
-A production-ready Node.js backend for university AI-powered CBT system. Built with:
-- **100% JavaScript** (no TypeScript)
-- **Async/Await** throughout
-- **No try/catch in controllers** (global error handler only)
-- **Modular, scalable design**
-- **Ready to scale to 100k+ users**
+## Core Principles
 
-## Core Design Principles
+- Controllers are thin and never catch errors.
+- All input is validated with Joi before hitting services.
+- Services contain business logic and database operations.
+- Global error middleware formats all errors.
 
-### 1. Request Flow Architecture
+## Request Flow
 
 ```
 HTTP Request
-    ↓
-Route Handler
-    ↓
-[Validation Middleware] ← Joi Schemas
-    ↓
-[Async Handler Wrapper]
-    ↓
-Controller (NO error handling)
-    ↓
-Service Layer (business logic)
-    ↓
-Database Models (Mongoose)
-    ↓
-MongoDB
-    ↓
-[Response or Error through Global Handler]
-    ↓
-HTTP Response
+  -> Route
+  -> Validation middleware (Joi)
+  -> Async handler
+  -> Controller
+  -> Service
+  -> Mongoose model
+  -> MongoDB
+  -> Response or global error handler
 ```
 
-### 2. Error Handling Pattern
+## Key Modules
 
-**Controllers DO NOT catch errors:**
+### Materials + Extraction
 
-```javascript
-// ✅ CORRECT - No try/catch
-const handler = asyncHandler(async (req, res) => {
-  const data = await service.getData();
-  res.json(data);
-});
+- Materials are stored in MongoDB with `fileUrl`, `fileType`, `content`, and metadata.
+- Uploads accept pdf/image/text and store files in local disk or S3, then extract text on the backend.
+- Extraction paths:
+  - PDF: `pdf-parse`
+  - Image: `tesseract.js` OCR
+  - Text: raw content
 
-// ❌ WRONG - Never do this
-const handler = async (req, res) => {
-  try {
-    const data = await service.getData();
-  } catch (error) {
-    // Don't do this!
-  }
-};
-```
+### Question Bank Detection
 
-All errors bubble up to the global error handler:
+- A regex-based detector parses question banks with `A-D` options.
+- If answers are missing, generation stops and returns extracted questions for admin completion.
+- Detector is wrapped so it can be swapped to AI-based detection later.
 
-```javascript
-// src/middleware/error.middleware.js
-const errorHandler = (err, req, res, next) => {
-  // All errors (validation, service, DB) land here
-  // Return formatted response
-};
-```
+### AI Generation
 
-### 3. Validation Pattern
+- Provider selection supports Gemini primary and OpenAI fallback.
+- Providers are selected by env: `AI_PROVIDER`, `AI_FALLBACK_PROVIDER`.
+- Both providers enforce strict JSON output and 10 questions exactly.
 
-**All input validated via Joi before business logic:**
+### Question Workflow
 
-```javascript
-// src/validators/university.validator.js
-const createUniversitySchema = Joi.object({
-  code: Joi.string().alphanum().required(),
-  name: Joi.string().min(2).required(),
-});
+- Manual admin questions auto-approve.
+- AI/extracted questions are created as `pending`.
+- Rejected questions are deleted immediately.
+- Approved questions are visible to students.
 
-// Used in route
-const route = [
-  validate(createUniversitySchema),
-  asyncHandler(controller.createUniversity)
-];
-```
+## Storage Architecture
 
-**Benefits:**
-- Input sanitized before service layer
-- Consistent validation error format
-- No duplicate validation logic
+- `STORAGE_PROVIDER=local` serves files from `/uploads` via Express.
+- `STORAGE_PROVIDER=s3` uploads to S3 with `S3_*` credentials.
 
-### 4. Service Layer
-
-Services contain **all business logic**, models are **data-only:**
-
-```javascript
-// src/services/universityService.js
-const createUniversity = async (universityData) => {
-  // Business logic: check duplicates, calculate defaults, etc
-  const existing = await University.findOne({ code });
-  if (existing) throw new ApiError(409, 'Exists');
-  
-  const university = new University(universityData);
-  return await university.save();
-};
-```
-
-**Why:**
-- Controllers stay thin (5-10 lines)
-- Services are testable
-- Easy to reuse logic across endpoints
-- Clear separation of concerns
-
-## Detailed Architecture
-
-### Directory Structure
+## Directory Highlights
 
 ```
-backend/
-├── src/
-│   ├── config/
-│   │   ├── database.js        # MongoDB connection
-│   │   ├── env.js             # Environment validation
-│   │   └── indexes.js         # Database index creation
-│   │
-│   ├── models/
-│   │   ├── University.js       # Mongoose schemas
-│   │   ├── Faculty.js
-│   │   ├── Course.js
-│   │   ├── Topic.js
-│   │   ├── Question.js         # Core question model
-│   │   ├── Material.js         # Uploaded files
-│   │   ├── User.js
-│   │   └── AIGenerationLog.js  # Gemini call logs
-│   │
-│   ├── services/
-│   │   ├── universityService.js
-│   │   ├── courseService.js
-│   │   ├── questionService.js  # All question logic
-│   │   ├── materialService.js  # AI integration
-│   │   └── userService.js
-│   │
-│   ├── controllers/
-│   │   ├── universityController.js
-│   │   ├── courseController.js
-│   │   ├── questionController.js
-│   │   └── userController.js
-│   │
-│   ├── routes/
-│   │   ├── university.routes.js
-│   │   ├── course.routes.js
-│   │   ├── question.routes.js
-│   │   └── user.routes.js
-│   │
-│   ├── middleware/
-│   │   ├── error.middleware.js      # Global error handler
-│   │   ├── validate.middleware.js   # Joi validator wrapper
-│   │   └── requestLogger.middleware.js
-│   │
-│   ├── validators/
-│   │   ├── university.validator.js  # Joi schemas
-│   │   ├── course.validator.js
-│   │   ├── question.validator.js
-│   │   └── user.validator.js
-│   │
-│   ├── utils/
-│   │   ├── ApiError.js              # Custom error class
-│   │   ├── asyncHandler.js          # Async wrapper
-│   │   ├── gemini.js                # AI integration
-│   │   └── responseFormatter.js     # Response helpers
-│   │
-│   ├── constants/
-│   │   └── index.js                 # Enums & limits
-│   │
-│   ├── app.js                       # Express setup
-│   └── server.js                    # Startup
-│
-└── package.json
+src/
+  controllers/   # HTTP handlers
+  services/      # business logic
+  models/        # Mongoose schemas
+  validators/    # Joi schemas
+  middleware/    # auth, validation, rate limits
+  utils/         # extraction, AI providers
 ```
 
-## Key Components Explained
+## Exam Behavior
 
-### 1. AsyncHandler Wrapper
+- Exams auto-submit on expiry.
+- Results are gated by `EXAM_RESULT_DELAY_MINUTES`.
 
-```javascript
-// src/utils/asyncHandler.js
-const asyncHandler = (fn) => (req, res, next) => {
-  Promise.resolve(fn(req, res, next)).catch(next);
-};
+## Security and Access
 
-// Usage
-const handler = asyncHandler(async (req, res) => {
-  const data = await service.getData();  // If this throws
-  res.json(data);                         // Error goes to global handler
-});
-```
+- JWT auth for protected routes.
+- Admin-only routes for materials, question approval, and deletion.
+- Access level filtering for exam question pulls.
 
-**Why this works:**
-- Catches any error (validation, service, DB)
-- Passes to Express error handler
-- No nested try/catch needed
-
-### 2. Global Error Handler
-
-```javascript
-// src/middleware/error.middleware.js
-app.use((err, req, res, next) => {
-  if (err instanceof ApiError) {
-    return res.status(err.statusCode).json(err.toJSON());
-  }
-  
-  // Development: show stack
-  // Production: hide details
-  res.status(500).json({ message: 'Internal error' });
-});
-```
-
-### 3. Validation Middleware
-
-```javascript
-// src/middleware/validate.middleware.js
-const validate = (schema) => (req, res, next) => {
-  const { error, value } = schema.validate(req.body);
-  if (error) {
-    return next(new ApiError(400, 'Validation error', 
-      error.details.map(d => d.message)
-    ));
-  }
-  req.body = value;
-  next();
-};
-```
-
-### 4. Question Hierarchy
-
-Every question is tied to full academic context:
+## AI Generation Flow
 
 ```
-University
-  └── Faculty
-      └── Department
-          └── Course (CSC 201)
-              └── Topic (Data Structures)
-                  └── Question (MCQ)
-```
-
-Benefits:
-- Can query "all CSC201 questions"
-- Can ask "show free tier questions in Data Structures"
-- Can track "student progress in topic X of course Y"
-
-### 5. Question Status Workflow
-
-```
-Created (AI) → PENDING → APPROVED/REJECTED → FINAL
-
-Only APPROVED questions are shown to students
-Questions are IMMUTABLE after approval
-```
-
-### 6. Access Control
-
-```javascript
-// Free user can only see free questions
-const questions = await Question.find({
-  accessLevel: 'free',
-  status: 'approved'
-});
-
-// Premium user sees all
-const questions = await Question.find({
-  accessLevel: { $in: ['free', 'basic', 'premium'] },
-  status: 'approved'
-});
-```
-
-## Database Design
-
-### Collections
-
-#### Questions (Core)
-```javascript
-{
-  _id: ObjectId,
-  universityId: ObjectId,
-  courseId: ObjectId,
-  topicId: ObjectId,
-  text: "What is...",
-  options: { A: "...", B: "...", C: "...", D: "..." },
-  correctAnswer: "A",
-  difficulty: "medium",
-  source: "AI",
-  accessLevel: "free",
-  status: "approved",
-  stats: { attemptCount: 100, correctCount: 75 }
-}
-```
-
-#### Users
-```javascript
-{
-  _id: ObjectId,
-  email: "student@unizik.edu.ng",
-  universityId: ObjectId,
-  plan: "free",
-  planExpiresAt: Date,
-  stats: { questionsAttempted: 50, accuracy: 0.85 }
-}
-```
-
-#### Materials
-```javascript
-{
-  _id: ObjectId,
-  courseId: ObjectId,
-  fileType: "pdf",
-  content: "...",
-  status: "processed",
-  questionsGenerated: 10
-}
-```
-
-### Critical Indexes
-
-For a system with 100k+ questions:
-
-```javascript
-// Questions - most queried
-Question.index({ topicId: 1, status: 1, accessLevel: 1 })
-Question.index({ universityId: 1, difficulty: 1 })
-
-// Users - frequent lookups
-User.index({ email: 1 }, { unique: true })
-User.index({ universityId: 1, plan: 1 })
-
-// Courses - navigational
-Course.index({ universityId: 1, level: 1 })
-```
-
-All created automatically on server startup.
-
-## API Design
-
-### Response Format (Success)
-
-```json
-{
-  "success": true,
-  "statusCode": 200,
-  "data": { ... },
-  "message": "Optional message",
-  "count": 25,
-  "timestamp": "2026-02-02T10:30:00Z"
-}
-```
-
-### Response Format (Error)
-
-```json
-{
-  "success": false,
-  "statusCode": 400,
-  "message": "Validation error",
-  "details": ["field1 error", "field2 error"],
-  "timestamp": "2026-02-02T10:30:00Z"
-}
-```
-
-### Route Hierarchy
-
-```
-/api/universities
-  /api/universities/:universityId/faculties
-    /api/faculties/:facultyId/departments
-      /api/departments/:departmentId/courses
-        /api/courses/:courseId/topics
-          /api/questions
-            /api/courses/:courseId/materials
-              /api/courses/:courseId/materials/:materialId/generate-questions
-```
-
-Mirrors the academic hierarchy.
-
-## AI Integration (Gemini)
-
-### Question Generation Flow
-
-```
-1. Admin uploads material
-2. Admin calls /generate-questions
-3. System sends to Gemini:
-   - Course code (CSC201)
-   - Topic name (Data Structures)
-   - Material content (text/PDF)
-4. Gemini returns ~10 questions
-5. Questions saved as PENDING
-6. Admin reviews & approves/rejects
-7. APPROVED questions visible to students
+Upload material
+  -> Extract text
+  -> Question bank detection
+      -> missing answers: admin fills, import
+      -> complete: create pending questions
+  -> Non-question bank: AI generates 10 questions (pending)
+  -> Admin approves
 ```
 
 ### Gemini Request Format

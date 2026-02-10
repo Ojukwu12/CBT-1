@@ -38,6 +38,10 @@ const examSessionSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
+  resultsAvailableAt: {
+    type: Date,
+    default: null
+  },
   durationMinutes: {
     type: Number,
     default: 60

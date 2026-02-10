@@ -1,12 +1,27 @@
 const Material = require('../models/Material');
 const Question = require('../models/Question');
 const AIGenerationLog = require('../models/AIGenerationLog');
-const { generateQuestions } = require('../utils/gemini');
+const { generateQuestions } = require('../utils/questionGenerator');
+const { extractTextFromMaterial } = require('../utils/fileExtraction');
+const { detectQuestionBank } = require('../utils/questionBankDetector');
 const { env } = require('../config/env');
 const ApiError = require('../utils/ApiError');
 
 const uploadMaterial = async (materialData) => {
-  const material = new Material(materialData);
+  const { fileBuffer, mimeType, ...payload } = materialData;
+  const material = new Material(payload);
+
+  if (!material.content) {
+    const extracted = await extractTextFromMaterial({
+      fileBuffer,
+      fileUrl: material.fileUrl,
+      fileType: material.fileType,
+      mimeType,
+    });
+
+    material.content = extracted;
+  }
+
   return await material.save();
 };
 
@@ -41,21 +56,75 @@ const generateQuestionsFromMaterial = async (
   }
 
   if (!material.content) {
-    throw new ApiError(400, 'Material has no content to generate questions from');
+    const extracted = await extractTextFromMaterial({
+      fileUrl: material.fileUrl,
+      fileType: material.fileType,
+    });
+    if (!extracted) {
+      throw new ApiError(400, 'Material has no content to generate questions from');
+    }
+    material.content = extracted;
+    await material.save();
+  }
+
+  const parsed = detectQuestionBank(material.content);
+  if (parsed.isQuestionBank) {
+    if (parsed.missingAnswers > 0) {
+      return {
+        mode: 'question_bank',
+        missingAnswers: parsed.missingAnswers,
+        extractedQuestions: parsed.questions,
+        questions: [],
+      };
+    }
+
+    const course = await require('../models/Course').findById(material.courseId);
+    if (!course) {
+      throw new ApiError(404, 'Course not found for material');
+    }
+
+    if (!material.topicId) {
+      throw new ApiError(400, 'Material must be linked to a topic for question import');
+    }
+
+    const questionsToCreate = parsed.questions.map((q) => ({
+      universityId: material.universityId,
+      courseId: material.courseId,
+      topicId: material.topicId,
+      departmentId: course.departmentId,
+      level: course.level,
+      createdBy: adminId,
+      text: q.text,
+      options: q.options,
+      correctAnswer: q.correctAnswer,
+      difficulty: q.difficulty || 'medium',
+      source: 'Human',
+      accessLevel: 'free',
+      status: 'pending',
+    }));
+
+    const created = await Question.insertMany(questionsToCreate);
+
+    await Material.findByIdAndUpdate(materialId, {
+      status: 'processed',
+      questionsGenerated: created.length,
+    });
+
+    return {
+      mode: 'question_bank',
+      questions: created,
+    };
   }
 
   if (!env.AI_ENABLED) {
     throw new ApiError(503, 'AI generation is disabled in this environment');
   }
 
-  if (!env.GEMINI_API_KEY) {
-    throw new ApiError(503, 'AI generation unavailable: missing API key');
-  }
-
   const cacheHours = env.AI_CACHE_HOURS || 24;
   const cacheThreshold = new Date(Date.now() - cacheHours * 60 * 60 * 1000);
   const cachedLog = await AIGenerationLog.findOne({
     materialId,
+    difficulty,
     status: 'success',
     createdAt: { $gte: cacheThreshold },
   }).sort({ createdAt: -1 });
@@ -66,6 +135,7 @@ const generateQuestionsFromMaterial = async (
     });
     if (cachedQuestions.length) {
       return {
+        mode: 'ai',
         log: cachedLog,
         questions: cachedQuestions,
       };
@@ -88,17 +158,27 @@ const generateQuestionsFromMaterial = async (
     materialId,
     universityId: material.universityId,
     initiatedBy: adminId,
+    difficulty,
     status: 'pending',
   });
   log = await log.save();
 
   try {
     const course = await require('../models/Course').findById(material.courseId);
-    const topic = material.topicId
-      ? await require('../models/Topic').findById(material.topicId)
-      : null;
+    if (!course) {
+      throw new ApiError(404, 'Course not found for material');
+    }
 
-    const topicName = topic?.name || 'General';
+    if (!material.topicId) {
+      throw new ApiError(400, 'Material must be linked to a topic for AI generation');
+    }
+
+    const topic = await require('../models/Topic').findById(material.topicId);
+    if (!topic) {
+      throw new ApiError(404, 'Topic not found for material');
+    }
+
+    const topicName = topic.name;
     const generatedQuestions = await generateQuestions(
       material.content,
       course.code,
@@ -143,6 +223,7 @@ const generateQuestionsFromMaterial = async (
     });
 
     return {
+      mode: 'ai',
       log,
       questions: created,
     };
@@ -167,9 +248,51 @@ const generateQuestionsFromMaterial = async (
   }
 };
 
+const importQuestionsFromMaterial = async (materialId, adminId, questions) => {
+  const material = await Material.findById(materialId);
+  if (!material) {
+    throw new ApiError(404, 'Material not found');
+  }
+
+  if (!material.topicId) {
+    throw new ApiError(400, 'Material must be linked to a topic for question import');
+  }
+
+  const course = await require('../models/Course').findById(material.courseId);
+  if (!course) {
+    throw new ApiError(404, 'Course not found for material');
+  }
+
+  const toCreate = questions.map((q) => ({
+    universityId: material.universityId,
+    courseId: material.courseId,
+    topicId: material.topicId,
+    departmentId: course.departmentId,
+    level: course.level,
+    createdBy: adminId,
+    text: q.text,
+    options: q.options,
+    correctAnswer: q.correctAnswer,
+    difficulty: q.difficulty || 'medium',
+    source: 'Human',
+    accessLevel: 'free',
+    status: 'pending',
+  }));
+
+  const created = await Question.insertMany(toCreate);
+
+  await Material.findByIdAndUpdate(materialId, {
+    status: 'processed',
+    questionsGenerated: created.length,
+  });
+
+  return { questions: created };
+};
+
 module.exports = {
   uploadMaterial,
   getMaterialById,
   getMaterialsByCourse,
   generateQuestionsFromMaterial,
+  importQuestionsFromMaterial,
 };

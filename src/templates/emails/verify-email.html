@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Verify Your Email</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f6f7fb; color: #111827; margin: 0; padding: 0; }
+    .container { max-width: 640px; margin: 0 auto; background: #ffffff; padding: 32px; }
+    .button { display: inline-block; background: #1d4ed8; color: #ffffff; text-decoration: none; padding: 12px 20px; border-radius: 6px; }
+    .muted { color: #6b7280; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Hi {{firstName}},</h2>
+    <p>Please verify your email address to finish setting up your account.</p>
+    <p><a class="button" href="{{verifyLink}}">Verify Email</a></p>
+    <p class="muted">This link expires in {{expiresInMinutes}} minutes.</p>
+    <p class="muted">If you did not create an account, you can ignore this email.</p>
+    <p class="muted">Need help? Contact {{supportEmail}}.</p>
+  </div>
+</body>
+</html>

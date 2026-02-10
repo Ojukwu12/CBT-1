@@ -31,6 +31,9 @@ const createQuestion = [
       departmentId: course.departmentId,
       level: course.level,
       createdBy: req.user?.id,
+      source: 'Human',
+      status: 'approved',
+      accessLevel: req.body.accessLevel || 'free',
     });
 
     res.status(201).json({
@@ -193,10 +196,20 @@ const rejectQuestion = [
     res.status(200).json({
       success: true,
       data: question,
-      message: 'Question rejected successfully',
+      message: 'Question rejected and deleted successfully',
     });
   })
 ];
+
+const deleteQuestion = asyncHandler(async (req, res) => {
+  const { questionId } = req.params;
+  const question = await questionService.deleteQuestion(questionId);
+  res.status(200).json({
+    success: true,
+    data: question,
+    message: 'Question deleted successfully',
+  });
+});
 
 const getQuestionStats = asyncHandler(async (req, res) => {
   const { topicId } = req.params;
@@ -218,5 +231,6 @@ module.exports = {
   getPendingQuestions,
   approveQuestion,
   rejectQuestion,
+  deleteQuestion,
   getQuestionStats,
 };

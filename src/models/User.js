@@ -56,6 +56,15 @@ const userSchema = new mongoose.Schema(
       accuracy: { type: Number, default: 0 },
       topicsStudied: { type: Number, default: 0 },
     },
+    emailVerifiedAt: {
+      type: Date,
+      default: null,
+    },
+    emailVerificationTokenHash: {
+      type: String,
+      select: false,
+    },
+    emailVerificationTokenExpiresAt: Date,
     passwordResetTokenHash: {
       type: String,
       select: false,

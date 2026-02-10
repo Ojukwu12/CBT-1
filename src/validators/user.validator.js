@@ -5,6 +5,7 @@ const createUserSchema = Joi.object({
   firstName: Joi.string().min(2).max(50).required(),
   lastName: Joi.string().min(2).max(50).required(),
   universityId: Joi.string().required(),
+  password: Joi.string().min(6).max(128).required(),
 });
 
 const upgradePlanSchema = Joi.object({

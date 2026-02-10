@@ -248,6 +248,20 @@ class EmailService {
   }
 
   /**
+   * Email verification (magic link only)
+   */
+  async sendEmailVerificationLink(user, { verifyLink, expiresInMinutes }) {
+    return this.send(user.email, 'Verify your email address', 'verify-email', {
+      firstName: user.firstName || 'User',
+      verifyLink,
+      expiresInMinutes,
+      supportEmail: env.SUPPORT_EMAIL || 'support@universitycbt.com',
+      appUrl: env.APP_URL || this.baseUrl,
+      baseUrl: this.baseUrl,
+    });
+  }
+
+  /**
    * Question approved email (admin notification)
    */
   async sendQuestionApprovedEmail(admin, question, approver) {
