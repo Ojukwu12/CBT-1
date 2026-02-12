@@ -26,7 +26,6 @@ const getAllUsersSchema = Joi.object({
   role: Joi.string().valid('student', 'admin'),
   isActive: Joi.string().valid('true', 'false'),
   search: Joi.string().trim().min(1).max(200),
-  universityId: Joi.string(),
 });
 
 const banUserSchema = Joi.object({

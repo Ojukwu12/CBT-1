@@ -45,9 +45,11 @@ const ensureIndexes = async () => {
     await Material.collection.createIndex({ status: 1 });
     await Material.collection.createIndex({ universityId: 1 });
 
-    // User indexes - critical for authentication in Phase 1
+    // User indexes - critical for authentication
     await User.collection.createIndex({ email: 1 }, { unique: true });
-    await User.collection.createIndex({ universityId: 1, plan: 1 });
+    await User.collection.createIndex({ lastSelectedUniversityId: 1 });
+    await User.collection.createIndex({ lastSelectedDepartmentId: 1 });
+    await User.collection.createIndex({ lastSelectedCourseId: 1 });
     await User.collection.createIndex({ isActive: 1 });
     await User.collection.createIndex({ role: 1 });
 

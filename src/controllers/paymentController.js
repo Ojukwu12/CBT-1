@@ -60,7 +60,7 @@ const initializePayment = asyncHandler(async (req, res) => {
   // Create transaction record (pending)
   const transaction = new Transaction({
     userId: user._id,
-    universityId: user.universityId,
+    universityId: null,
     email: user.email,
     plan,
     amount: paystackService.getPlanPricing()[plan].price,
@@ -440,7 +440,7 @@ const handleWebhook = asyncHandler(async (req, res) => {
     // Create new transaction record (webhook came before client verify)
     transaction = new Transaction({
       userId,
-      universityId: user.universityId,
+      universityId: null,
       email: customer.email,
       plan,
       amount: Math.round(amount) / 100, // Convert Kobo to Naira (integer math)

@@ -56,11 +56,11 @@ class ExamService {
   /**
    * Start a new exam session
    * @param {string} userId - User ID
-   * @param {object} examData - Exam configuration
+   * @param {object} examData - Exam configuration (universityId, departmentId, courseId required)
    * @returns {Promise<object>} Exam session with questions
    */
   static async startExam(userId, examData) {
-    const { examType = 'practice', courseId, topicIds = [], totalQuestions = 10, durationMinutes = 60 } = examData;
+    const { universityId, departmentId, courseId, examType = 'practice', topicIds = [], totalQuestions = 10, durationMinutes = 60 } = examData;
 
     // Verify user exists and check tier access
     const user = await User.findById(userId);
@@ -76,15 +76,37 @@ class ExamService {
       await user.save();
     }
 
-    // Build query for questions
+    // Verify the course exists and belongs to the selected department/university
+    const course = await Course.findById(courseId);
+    if (!course) {
+      throw new ApiError(404, 'Course not found');
+    }
+    
+    if (course.universityId.toString() !== universityId) {
+      throw new ApiError(400, 'Course does not belong to the selected university');
+    }
+    
+    if (course.departmentId.toString() !== departmentId) {
+      throw new ApiError(400, 'Course does not belong to the selected department');
+    }
+
+    // Update user's last selected preferences for convenience
+    await User.findByIdAndUpdate(userId, {
+      $set: {
+        lastSelectedUniversityId: universityId,
+        lastSelectedDepartmentId: departmentId,
+        lastSelectedCourseId: courseId
+      }
+    });
+
+    // Build query for questions based on course
     const query = {
       isActive: true,
-      status: 'approved'
+      status: 'approved',
+      universityId: new mongoose.Types.ObjectId(universityId),
+      departmentId: new mongoose.Types.ObjectId(departmentId),
+      courseId: new mongoose.Types.ObjectId(courseId)
     };
-
-    if (courseId) {
-      query.courseId = new mongoose.Types.ObjectId(courseId);
-    }
 
     if (topicIds.length > 0) {
       query.topicId = { $in: topicIds.map((id) => new mongoose.Types.ObjectId(id)) };
@@ -112,8 +134,10 @@ class ExamService {
     // Create exam session
     const examSession = new ExamSession({
       userId,
+      universityId,
+      departmentId,
+      courseId,
       examType,
-      courseId: courseId || null,
       topicIds,
       totalQuestions: questions.length,
       durationMinutes,

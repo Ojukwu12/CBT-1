@@ -7,7 +7,7 @@ const { createUserSchema, upgradePlanSchema, downgradePlanSchema } = require('..
 const createUser = [
   validate(createUserSchema),
   asyncHandler(async (req, res) => {
-    const { email, firstName, lastName, universityId, password } = req.body;
+    const { email, firstName, lastName, password } = req.body;
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -15,7 +15,6 @@ const createUser = [
       email,
       firstName,
       lastName,
-      universityId,
       password: hashedPassword,
       plan: 'free',
       role: 'student',

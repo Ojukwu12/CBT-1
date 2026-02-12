@@ -7,6 +7,18 @@ const examSessionSchema = new mongoose.Schema({
     required: true,
     index: true
   },
+  universityId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'University',
+    required: true,
+    index: true
+  },
+  departmentId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Department',
+    required: true,
+    index: true
+  },
   examType: {
     type: String,
     enum: ['practice', 'mock', 'final'],
@@ -16,7 +28,7 @@ const examSessionSchema = new mongoose.Schema({
   courseId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Course',
-    required: false
+    required: true
   },
   topicIds: [{
     type: mongoose.Schema.Types.ObjectId,

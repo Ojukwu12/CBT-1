@@ -16,7 +16,11 @@ const uploadMaterial = [
 
     const user = await userService.getUserById(req.user.id);
 
-    await courseService.getCourseById(courseId);
+    // Get course to derive universityId and departmentId
+    const course = await courseService.getCourseById(courseId);
+    if (!course) {
+      throw new ApiError(404, 'Course not found');
+    }
 
     let finalFileUrl = fileUrl;
     let finalFileSize = fileSize;
@@ -39,7 +43,7 @@ const uploadMaterial = [
 
     const material = await materialService.uploadMaterial({
       courseId,
-      universityId: user.universityId,
+      universityId: course.universityId,
       title,
       fileType,
       fileUrl: finalFileUrl,

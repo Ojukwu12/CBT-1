@@ -11,7 +11,7 @@ const transactionSchema = new mongoose.Schema(
     universityId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'University',
-      required: true,
+      required: false,
       index: true,
     },
     paystackReference: {

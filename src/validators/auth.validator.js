@@ -39,12 +39,6 @@ const registerSchema = Joi.object({
       'string.min': 'Password must be at least 6 characters',
       'string.max': 'Password cannot exceed 128 characters',
     }),
-  universityId: Joi.string()
-    .required()
-    .trim()
-    .messages({
-      'string.empty': 'University ID is required',
-    }),
 });
 
 const loginSchema = Joi.object({

@@ -1,6 +1,7 @@
 const Leaderboard = require('../models/Leaderboard');
 const UserAnalytics = require('../models/UserAnalytics');
 const User = require('../models/User');
+const ExamSession = require('../models/ExamSession');
 const ApiError = require('../utils/ApiError');
 
 class LeaderboardService {
@@ -116,8 +117,11 @@ class LeaderboardService {
   }
 
   static async generateUniversityLeaderboard(universityId) {
-    const users = await User.find({ universityId }).select('_id');
-    const userIds = users.map(u => u._id);
+    // Get users who have taken exams from this university
+    const userIds = await ExamSession.distinct('userId', { 
+      universityId,
+      status: { $in: ['submitted', 'graded'] }
+    });
 
     const analytics = await UserAnalytics.find({ userId: { $in: userIds }, totalExamsCompleted: { $gt: 0 } })
       .sort({ averageScore: -1 })

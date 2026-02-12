@@ -29,7 +29,7 @@ const generateRefreshToken = (payload, expiresIn = '30d') => {
  * POST /api/auth/register
  */
 const register = asyncHandler(async (req, res, next) => {
-  const { firstName, lastName, email, password, universityId } = req.body;
+  const { firstName, lastName, email, password } = req.body;
 
   // Check if user already exists
   const existingUser = await User.findOne({ email });
@@ -43,13 +43,12 @@ const register = asyncHandler(async (req, res, next) => {
   const verifyToken = crypto.randomBytes(32).toString('hex');
   const verifyTokenExpiresAt = new Date(Date.now() + (env.EMAIL_VERIFICATION_TOKEN_TTL_MINUTES || 60) * 60 * 1000);
 
-  // Create user
+  // Create user (no universityId - users select university when taking exams)
   const user = new User({
     firstName,
     lastName,
     email,
     password: hashedPassword,
-    universityId,
     role: 'student',
     plan: 'free',
     isActive: true,

@@ -2,12 +2,6 @@ const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema(
   {
-    universityId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'University',
-      required: true,
-      index: true,
-    },
     email: {
       type: String,
       required: true,
@@ -55,6 +49,24 @@ const userSchema = new mongoose.Schema(
       questionsCorrect: { type: Number, default: 0 },
       accuracy: { type: Number, default: 0 },
       topicsStudied: { type: Number, default: 0 },
+    },
+    lastSelectedUniversityId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'University',
+      required: false,
+      index: true,
+    },
+    lastSelectedDepartmentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Department',
+      required: false,
+      index: true,
+    },
+    lastSelectedCourseId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Course',
+      required: false,
+      index: true,
     },
     emailVerifiedAt: {
       type: Date,

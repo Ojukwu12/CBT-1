@@ -14,7 +14,7 @@ const logger = new Logger('AdminUserController');
  * GET /api/admin/users
  */
 const getAllUsers = asyncHandler(async (req, res) => {
-  const { page = 1, limit = 20, plan, role, isActive, search, universityId } = req.query;
+  const { page = 1, limit = 20, plan, role, isActive, search } = req.query;
 
   const skip = (page - 1) * limit;
   const query = {};
@@ -22,7 +22,6 @@ const getAllUsers = asyncHandler(async (req, res) => {
   if (plan) query.plan = plan;
   if (role) query.role = role;
   if (isActive !== undefined) query.isActive = isActive === 'true';
-  if (universityId) query.universityId = universityId;
 
   if (search) {
     query.$or = [

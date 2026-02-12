@@ -1,17 +1,32 @@
 const Joi = require('joi');
 
 const examStartSchema = Joi.object({
+  universityId: Joi.string()
+    .regex(/^[0-9a-fA-F]{24}$/)
+    .required()
+    .messages({
+      'string.pattern.base': 'Invalid university ID format',
+      'any.required': 'University selection is required'
+    }),
+  departmentId: Joi.string()
+    .regex(/^[0-9a-fA-F]{24}$/)
+    .required()
+    .messages({
+      'string.pattern.base': 'Invalid department ID format',
+      'any.required': 'Department selection is required'
+    }),
+  courseId: Joi.string()
+    .regex(/^[0-9a-fA-F]{24}$/)
+    .required()
+    .messages({
+      'string.pattern.base': 'Invalid course ID format',
+      'any.required': 'Course selection is required'
+    }),
   examType: Joi.string()
     .valid('practice', 'mock', 'final')
     .default('practice')
     .messages({
       'any.only': 'Exam type must be practice, mock, or final'
-    }),
-  courseId: Joi.string()
-    .regex(/^[0-9a-fA-F]{24}$/)
-    .optional()
-    .messages({
-      'string.pattern.base': 'Invalid course ID format'
     }),
   topicIds: Joi.array()
     .items(

@@ -9,11 +9,13 @@ class ExamController {
    * POST /api/exams/start
    */
   static startExam = asyncHandler(async (req, res) => {
-    const { examType = 'practice', courseId, topicIds = [], totalQuestions = 10, durationMinutes = 60 } = req.body;
+    const { universityId, departmentId, courseId, examType = 'practice', topicIds = [], totalQuestions = 10, durationMinutes = 60 } = req.body;
 
     const result = await ExamService.startExam(req.user.id, {
-      examType,
+      universityId,
+      departmentId,
       courseId,
+      examType,
       topicIds,
       totalQuestions,
       durationMinutes

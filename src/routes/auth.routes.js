@@ -13,7 +13,7 @@ const router = express.Router();
 /**
  * Register new user
  * POST /api/auth/register
- * Body: { firstName, lastName, email, password, universityId }
+ * Body: { firstName, lastName, email, password }
  */
 router.post(
   '/register',

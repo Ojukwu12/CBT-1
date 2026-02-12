@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const User = require('../models/User');
 const ExamSession = require('../models/ExamSession');
 const Question = require('../models/Question');
@@ -139,20 +140,20 @@ class AdminAnalyticsService {
   }
 
   static async getUniversityStats(universityId) {
-    const universityUsers = await User.countDocuments({ universityId });
-    const userIds = (await User.find({ universityId }).select('_id')).map(u => u._id);
-    const universityExams = await ExamSession.countDocuments({
-      userId: { $in: userIds }
-    });
-
+    // Get exam sessions for this university (based on course/department)
+    const universityExams = await ExamSession.countDocuments({ universityId });
+    
+    // Get unique users who have taken exams from this university
+    const uniqueUsers = await ExamSession.distinct('userId', { universityId });
+    
     const avgScore = await ExamSession.aggregate([
-      { $match: { userId: { $in: userIds } } },
+      { $match: { universityId: new mongoose.Types.ObjectId(universityId) } },
       { $group: { _id: null, avgScore: { $avg: '$score' } } }
     ]);
 
     return {
       universityId,
-      totalUsers: universityUsers,
+      totalUsers: uniqueUsers.length,
       totalExams: universityExams,
       averageScore: Math.round(avgScore[0]?.avgScore || 0),
       timestamp: new Date()
