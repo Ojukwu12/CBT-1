@@ -139,9 +139,12 @@ const downloadStudyMaterial = asyncHandler(async (req, res) => {
   // Check access level
   const user = req.user;
   if (material.accessLevel !== 'free') {
-    if (!user || user.plan !== 'premium' && material.accessLevel === 'premium') {
-      if (user.plan === 'free' && material.accessLevel !== 'free') {
-        throw new ApiError(403, 'Premium access required to download this material');
+    // Admins have full access (same as premium)
+    if (user.role !== 'admin') {
+      if (!user || user.plan !== 'premium' && material.accessLevel === 'premium') {
+        if (user.plan === 'free' && material.accessLevel !== 'free') {
+          throw new ApiError(403, 'Premium access required to download this material');
+        }
       }
     }
   }

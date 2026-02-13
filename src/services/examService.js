@@ -78,7 +78,10 @@ class ExamService {
 
     // Apply tier-based question count restrictions
     let finalTotalQuestions = totalQuestions;
-    if (user.plan === 'free') {
+    if (user.role === 'admin') {
+      // Admins can select any number (same as premium)
+      finalTotalQuestions = Math.min(Math.max(totalQuestions, 1), 100);
+    } else if (user.plan === 'free') {
       // Free tier: fixed 10 questions
       finalTotalQuestions = 10;
     } else {
@@ -123,12 +126,15 @@ class ExamService {
     }
 
     // Apply tier-based access control
-    if (user.plan === 'free') {
+    // Admins always get full access (same as premium)
+    if (user.role === 'admin') {
+      // No accessLevel restriction - admins get all questions
+    } else if (user.plan === 'free') {
       query.accessLevel = 'free';
     } else if (user.plan === 'basic') {
       query.accessLevel = { $in: ['free', 'basic'] };
     }
-    // Premium users get all questions
+    // Premium users and admins get all questions
 
     // Get random questions
     const questions = await Question.aggregate([
