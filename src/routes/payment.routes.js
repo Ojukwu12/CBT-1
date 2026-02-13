@@ -84,6 +84,18 @@ router.get(
 );
 
 /**
+ * Validate promo code
+ * POST /api/payments/validate-promo
+ * Headers: Authorization: Bearer token
+ * Body: { promoCode: 'CODE123', plan: 'basic' | 'premium' }
+ */
+router.post(
+  '/validate-promo',
+  verifyToken,
+  paymentController.validatePromoCode
+);
+
+/**
  * Webhook endpoint for Paystack callbacks
  * POST /api/payments/webhook
  * No authentication - verified by Paystack signature

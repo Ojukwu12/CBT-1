@@ -32,9 +32,28 @@ const transactionSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    originalPrice: {
+      type: Number,
+      required: true, // Original price before discount
+    },
+    discountAmount: {
+      type: Number,
+      default: 0, // Discount applied
+    },
     amount: {
       type: Number,
-      required: true, // In Naira
+      required: true, // Final amount paid (originalPrice - discountAmount)
+    },
+    promoCode: {
+      type: String,
+      uppercase: true,
+      default: null,
+      index: true,
+    },
+    promoCodeId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'PromoCode',
+      default: null,
     },
     planExpiryDate: {
       type: Date,

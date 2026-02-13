@@ -6,6 +6,7 @@
 const axios = require('axios');
 const ApiError = require('../utils/ApiError');
 const Logger = require('../utils/logger');
+const PlanPricing = require('../models/PlanPricing');
 
 const logger = new Logger('PaystackService');
 
@@ -29,9 +30,47 @@ class PaystackService {
   }
 
   /**
-   * Plan pricing configuration
+   * Get plan pricing from database (dynamic pricing)
    */
-  getPlanPricing() {
+  async getPlanPricing() {
+    try {
+      const pricingRecords = await PlanPricing.find({ isActive: true });
+      
+      if (pricingRecords.length === 0) {
+        // Fallback to default pricing if no database records exist
+        logger.warn('No pricing found in database, using default pricing');
+        return this.getDefaultPricing();
+      }
+
+      const pricing = {
+        free: {
+          name: 'Free',
+          price: 0,
+          duration: null,
+          features: ['10 questions/exam', 'Free questions only'],
+        },
+      };
+
+      pricingRecords.forEach((record) => {
+        pricing[record.plan] = {
+          name: record.name,
+          price: record.price,
+          duration: record.duration,
+          features: record.features,
+        };
+      });
+
+      return pricing;
+    } catch (error) {
+      logger.error('Error fetching pricing from database:', error);
+      return this.getDefaultPricing();
+    }
+  }
+
+  /**
+   * Default/fallback pricing configuration
+   */
+  getDefaultPricing() {
     return {
       free: {
         name: 'Free',
@@ -76,7 +115,7 @@ class PaystackService {
         throw new ApiError(400, 'Invalid plan. Choose: basic or premium');
       }
 
-      const pricing = this.getPlanPricing();
+      const pricing = await this.getPlanPricing();
       const planConfig = pricing[plan];
       const amountInKobo = planConfig.price * 100; // Convert Naira to Kobo
 
@@ -166,7 +205,7 @@ class PaystackService {
    */
   async createSubscription(email, plan, authorizationCode) {
     try {
-      const pricing = this.getPlanPricing();
+      const pricing = await this.getPlanPricing();
       const planConfig = pricing[plan];
       const amountInKobo = planConfig.price * 100;
 

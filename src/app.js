@@ -32,6 +32,7 @@ const studyPlanRoutes = require('./routes/studyPlan.routes');
 const leaderboardRoutes = require('./routes/leaderboard.routes');
 const adminAnalyticsRoutes = require('./routes/adminAnalytics.routes');
 const adminUsersRoutes = require('./routes/adminUsers.routes');
+const adminPricingRoutes = require('./routes/adminPricing.routes');
 const searchRoutes = require('./routes/search.routes');
 
 const app = express();
@@ -110,6 +111,7 @@ app.use('/api/study-plans', studyPlanRoutes);
 app.use('/api/leaderboards', leaderboardRoutes);
 app.use('/api/admin/analytics', adminAnalyticsRoutes);
 app.use('/api/admin/users', adminUsersRoutes);
+app.use('/api/admin', adminPricingRoutes);
 app.use('/api/search', searchRoutes);
 
 // Timeout error handler (must be before 404 handler)

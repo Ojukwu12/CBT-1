@@ -8,6 +8,15 @@ const initializePaymentSchema = Joi.object({
       'any.only': 'Plan must be one of: basic, premium',
       'any.required': 'Plan is required',
     }),
+  promoCode: Joi.string()
+    .min(3)
+    .max(20)
+    .uppercase()
+    .optional()
+    .messages({
+      'string.min': 'Promo code must be at least 3 characters',
+      'string.max': 'Promo code must not exceed 20 characters',
+    }),
 });
 
 const verifyPaymentSchema = Joi.object({

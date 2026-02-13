@@ -13,19 +13,20 @@ const userService = require('../services/userService');
 const auditLogService = require('../services/auditLogService');
 const User = require('../models/User');
 const Transaction = require('../models/Transaction');
+const PromoCode = require('../models/PromoCode');
 
 const logger = new Logger('PaymentController');
 
 /**
  * Initiate payment
  * POST /api/payments/initialize
- * Body: { plan: 'basic' | 'premium' }
+ * Body: { plan: 'basic' | 'premium', promoCode?: 'CODE123' }
  */
 const initializePayment = asyncHandler(async (req, res) => {
-  const { plan } = req.body; // Already validated by Joi
-  const userId = req.user.id; // From JWT token
+  const { plan, promoCode } = req.body;
+  const userId = req.user.id;
 
-  // Get user from database (explicitly exclude password for security)
+  // Get user
   const user = await User.findById(userId).select('-password');
   if (!user) {
     throw new ApiError(404, 'User not found');
@@ -36,12 +37,12 @@ const initializePayment = asyncHandler(async (req, res) => {
     throw new ApiError(400, `You already have the ${plan} plan`);
   }
 
-  // Idempotency check: Prevent multiple pending payments for the same plan
+  // Idempotency check
   const existingPendingPayment = await Transaction.findOne({
     userId,
     status: 'pending',
     plan,
-    createdAt: { $gte: new Date(Date.now() - 60 * 60 * 1000) }, // Within last hour
+    createdAt: { $gte: new Date(Date.now() - 60 * 60 * 1000) },
   });
 
   if (existingPendingPayment) {
@@ -52,18 +53,66 @@ const initializePayment = asyncHandler(async (req, res) => {
     );
   }
 
+  // Get plan pricing
+  const pricing = await paystackService.getPlanPricing();
+  const planConfig = pricing[plan];
+  
+  if (!planConfig) {
+    throw new ApiError(400, 'Invalid plan selected');
+  }
+
+  let originalPrice = planConfig.price;
+  let discountAmount = 0;
+  let finalAmount = originalPrice;
+  let promoCodeDoc = null;
+
+  // Validate and apply promo code if provided
+  if (promoCode) {
+    promoCodeDoc = await PromoCode.findOne({ code: promoCode.toUpperCase() });
+
+    if (!promoCodeDoc) {
+      throw new ApiError(404, 'Promo code not found');
+    }
+
+    if (!promoCodeDoc.isValid()) {
+      throw new ApiError(400, 'Promo code has expired or is no longer valid');
+    }
+
+    if (!promoCodeDoc.applicablePlans.includes(plan)) {
+      throw new ApiError(400, `Promo code is not applicable to ${plan} plan`);
+    }
+
+    if (!promoCodeDoc.canUserUse(userId)) {
+      throw new ApiError(400, 'You have already used this promo code');
+    }
+
+    // Calculate discount
+    discountAmount = promoCodeDoc.calculateDiscount(originalPrice);
+    finalAmount = originalPrice - discountAmount;
+
+    logger.info(`Promo code ${promoCode} applied: Original ₦${originalPrice}, Discount ₦${discountAmount}, Final ₦${finalAmount}`);
+  }
+
   // Initialize payment with Paystack
   const paymentData = await paystackService.initializePayment(user._id, user.email, plan, {
     userName: `${user.firstName} ${user.lastName}`,
+    originalPrice,
+    discountAmount,
+    finalAmount,
+    promoCode: promoCode || null,
   });
 
-  // Create transaction record (pending)
+  // Create transaction record
   const transaction = new Transaction({
     userId: user._id,
     universityId: null,
     email: user.email,
     plan,
-    amount: paystackService.getPlanPricing()[plan].price,
+    originalPrice,
+    discountAmount,
+    amount: finalAmount,
+    promoCode: promoCode ? promoCode.toUpperCase() : null,
+    promoCodeId: promoCodeDoc ? promoCodeDoc._id : null,
     paystackReference: paymentData.reference,
     status: 'pending',
     initiatedAt: new Date(),
@@ -81,7 +130,15 @@ const initializePayment = asyncHandler(async (req, res) => {
   );
 
   res.status(200).json(
-    new ApiResponse(200, paymentData, 'Payment initialized. Redirect user to authorization URL.')
+    new ApiResponse(200, {
+      ...paymentData,
+      pricing: {
+        originalPrice,
+        discountAmount,
+        finalAmount,
+        promoCode: promoCode || null,
+      },
+    }, 'Payment initialized. Redirect user to authorization URL.')
   );
 });
 
@@ -175,6 +232,31 @@ const verifyPayment = asyncHandler(async (req, res) => {
     // Transaction was already updated by another request (race condition occurred)
     logger.warn(`Concurrent payment verification detected: ${reference}`);
     throw new ApiError(409, 'Payment was already being processed by another request');
+  }
+
+  // Track promo code usage if one was used
+  if (transaction.promoCodeId && transaction.promoCode) {
+    try {
+      await PromoCode.findByIdAndUpdate(
+        transaction.promoCodeId,
+        {
+          $inc: { usageCount: 1 },
+          $push: {
+            usedBy: {
+              userId: transaction.userId,
+              transactionId: transaction._id,
+              usedAt: new Date(),
+              amount: transaction.amount,
+              discountApplied: transaction.discountAmount,
+            },
+          },
+        }
+      );
+      logger.info(`Promo code ${transaction.promoCode} usage recorded for user ${userId}`);
+    } catch (err) {
+      logger.error('Error tracking promo code usage:', err);
+      // Don't fail payment if promo tracking fails
+    }
   }
 
   // Send success email
@@ -503,9 +585,67 @@ const handleWebhook = asyncHandler(async (req, res) => {
   );
 });
 
+/**
+ * Validate promo code
+ * POST /api/payments/validate-promo
+ * Body: { promoCode: 'CODE123', plan: 'basic' | 'premium' }
+ */
+const validatePromoCode = asyncHandler(async (req, res) => {
+  const { promoCode, plan } = req.body;
+  const userId = req.user.id;
+
+  if (!promoCode) {
+    throw new ApiError(400, 'Promo code is required');
+  }
+
+  const promo = await PromoCode.findOne({ code: promoCode.toUpperCase() });
+
+  if (!promo) {
+    throw new ApiError(404, 'Promo code not found');
+  }
+
+  if (!promo.isValid()) {
+    throw new ApiError(400, 'Promo code has expired or is no longer valid');
+  }
+
+  if (!promo.applicablePlans.includes(plan)) {
+    throw new ApiError(400, `Promo code is not applicable to ${plan} plan`);
+  }
+
+  if (!promo.canUserUse(userId)) {
+    throw new ApiError(400, 'You have already used this promo code');
+  }
+
+  // Get plan pricing
+  const pricing = await paystackService.getPlanPricing();
+  const planConfig = pricing[plan];
+  const originalPrice = planConfig.price;
+  const discountAmount = promo.calculateDiscount(originalPrice);
+  const finalAmount = originalPrice - discountAmount;
+
+  res.status(200).json(
+    new ApiResponse(200, {
+      valid: true,
+      promoCode: promo.code,
+      description: promo.description,
+      discountType: promo.discountType,
+      discountValue: promo.discountValue,
+      pricing: {
+        originalPrice,
+        discountAmount,
+        finalAmount,
+        savings: discountAmount,
+        savingsPercentage: Math.round((discountAmount / originalPrice) * 100),
+      },
+      validUntil: promo.validUntil,
+    }, 'Promo code is valid')
+  );
+});
+
 module.exports = {
   initializePayment,
   verifyPayment,
+  validatePromoCode,
   getPlans,
   getTransactionHistory,
   checkPaymentStatus,
