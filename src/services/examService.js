@@ -76,6 +76,16 @@ class ExamService {
       await user.save();
     }
 
+    // Apply tier-based question count restrictions
+    let finalTotalQuestions = totalQuestions;
+    if (user.plan === 'free') {
+      // Free tier: fixed 10 questions
+      finalTotalQuestions = 10;
+    } else {
+      // Paid tiers (basic, premium): allow 1-100 questions
+      finalTotalQuestions = Math.min(Math.max(totalQuestions, 1), 100);
+    }
+
     // Verify the course exists and belongs to the selected department/university
     const course = await Course.findById(courseId);
     if (!course) {
@@ -123,7 +133,7 @@ class ExamService {
     // Get random questions
     const questions = await Question.aggregate([
       { $match: query },
-      { $sample: { size: Math.min(totalQuestions, 100) } },
+      { $sample: { size: Math.min(finalTotalQuestions, 100) } },
       { $project: { correctAnswer: 0 } } // Don't send correct answers to client
     ]);
 
@@ -147,7 +157,8 @@ class ExamService {
         isCorrect: null,
         timeSpentSeconds: 0,
         attemptedAt: null
-      }))
+      })),
+      tierRestriction: user.plan === 'free' ? 'free_tier_10_questions_fixed' : null
     });
 
     await examSession.save();
@@ -158,6 +169,10 @@ class ExamService {
       totalQuestions: examSession.totalQuestions,
       durationMinutes: examSession.durationMinutes,
       startedAt: examSession.startedAt,
+      userTier: user.plan,
+      tierInfo: user.plan === 'free' 
+        ? { type: 'free', maxQuestions: 10, note: 'Free tier limited to 10 questions' }
+        : { type: user.plan, maxQuestions: 100, note: `${user.plan} tier can select 1-100 questions` },
       questions: questions.map(q => ({
         questionId: q._id,
         text: q.text,

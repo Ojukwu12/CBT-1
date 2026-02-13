@@ -129,6 +129,23 @@ const userAnalyticsSchema = new mongoose.Schema({
       accuracy: Number
     }
   },
+  materialsDownloaded: {
+    type: Number,
+    default: 0
+  },
+  downloadedMaterials: [{
+    materialId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'StudyMaterial'
+    },
+    materialTitle: String,
+    courseId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Course'
+    },
+    downloadedAt: Date,
+    fileSize: Number
+  }],
   lastUpdated: {
     type: Date,
     default: Date.now

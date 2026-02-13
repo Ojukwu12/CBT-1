@@ -17,9 +17,13 @@ const router = express.Router({ mergeParams: true });
 
 router.use(verifyToken);
 
-router.post('/', isAdmin, upload.single('file'), materialController.uploadMaterial);
-router.get('/', materialController.listMaterialsByCourse);
-router.get('/:id', materialController.getMaterial);
+// Upload source material for question extraction
+router.post('/', isAdmin, upload.single('file'), materialController.uploadSourceMaterial);
+// List source materials (for question extraction status)
+router.get('/', materialController.listSourceMaterialsByCourse);
+// Get specific source material
+router.get('/:id', materialController.getSourceMaterial);
+// Generate questions from source material (OCR/AI extraction)
 router.post(
 	'/:materialId/generate-questions',
 	isAdmin,
@@ -27,6 +31,7 @@ router.post(
 	longOperationTimeout,
 	materialController.generateQuestionsFromMaterial
 );
+// Import manually created questions from material
 router.post(
 	'/:materialId/import-questions',
 	isAdmin,

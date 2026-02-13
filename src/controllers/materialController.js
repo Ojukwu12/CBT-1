@@ -1,3 +1,4 @@
+const SourceMaterial = require('../models/SourceMaterial');
 const materialService = require('../services/materialService');
 const courseService = require('../services/courseService');
 const userService = require('../services/userService');
@@ -8,11 +9,11 @@ const storageService = require('../services/storageService');
 const mime = require('mime-types');
 const ApiError = require('../utils/ApiError');
 
-const uploadMaterial = [
+const uploadSourceMaterial = [
   validate(uploadMaterialSchema),
   asyncHandler(async (req, res) => {
     const { courseId } = req.params;
-    const { title, fileType, fileUrl, fileSize, content, topicId } = req.body;
+    const { title, description, fileType, fileUrl, fileSize, content, topicId, extractionMethod = 'ocr' } = req.body;
 
     const user = await userService.getUserById(req.user.id);
 
@@ -38,39 +39,87 @@ const uploadMaterial = [
     }
 
     if (!req.file && !finalFileUrl && !content) {
-      throw new ApiError(400, 'Material must include a file upload, fileUrl, or content');
+      throw new ApiError(400, 'Source material must include a file upload, fileUrl, or content');
     }
 
-    const material = await materialService.uploadMaterial({
-      courseId,
+    const sourceMaterial = new SourceMaterial({
       universityId: course.universityId,
+      departmentId: course.departmentId,
+      courseId,
+      topicId,
       title,
+      description,
       fileType,
       fileUrl: finalFileUrl,
       fileSize: finalFileSize,
       content,
-      topicId,
       uploadedBy: req.user.id,
-      fileBuffer,
-      mimeType: req.file?.mimetype || mime.lookup(finalFileUrl || '') || undefined,
+      extractionMethod,
+      processingStatus: 'uploaded',
+      isActive: true,
     });
+
+    await sourceMaterial.save();
 
     res.status(201).json({
       success: true,
-      data: material,
-      message: 'Material uploaded successfully',
+      data: sourceMaterial,
+      message: 'Source material uploaded successfully. Question extraction will begin shortly.',
     });
   })
 ];
 
-const getMaterial = asyncHandler(async (req, res) => {
-  const material = await materialService.getMaterialById(req.params.id);
+const getSourceMaterial = asyncHandler(async (req, res) => {
+  const { materialId } = req.params;
+  
+  const material = await SourceMaterial.findById(materialId);
+  if (!material) {
+    throw new ApiError(404, 'Source material not found');
+  }
+
   res.status(200).json({
     success: true,
     data: material,
   });
 });
 
+const listSourceMaterialsByCourse = asyncHandler(async (req, res) => {
+  const { courseId } = req.params;
+  const { status = 'completed', page = 1, limit = 20 } = req.query;
+
+  await courseService.getCourseById(courseId);
+
+  const filters = {
+    courseId,
+    isActive: true,
+  };
+
+  if (status) {
+    filters.processingStatus = status;
+  }
+
+  const skip = (page - 1) * limit;
+  const [materials, total] = await Promise.all([
+    SourceMaterial.find(filters)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit)),
+    SourceMaterial.countDocuments(filters),
+  ]);
+
+  res.status(200).json({
+    success: true,
+    data: materials,
+    pagination: {
+      total,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      pages: Math.ceil(total / limit) || 1,
+    }
+  });
+});
+
+// Keep old function name for backward compatibility
 const listMaterialsByCourse = asyncHandler(async (req, res) => {
   const { courseId } = req.params;
 
@@ -147,8 +196,11 @@ const importQuestionsFromMaterial = [
 ];
 
 module.exports = {
-  uploadMaterial,
-  getMaterial,
+  uploadSourceMaterial,
+  uploadMaterial: uploadSourceMaterial, // backward compatibility
+  getSourceMaterial,
+  getMaterial: getSourceMaterial, // backward compatibility
+  listSourceMaterialsByCourse,
   listMaterialsByCourse,
   generateQuestionsFromMaterial,
   importQuestionsFromMaterial,
