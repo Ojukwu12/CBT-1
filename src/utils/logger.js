@@ -10,9 +10,10 @@ const LEVELS = {
 };
 
 class Logger {
-  constructor(module, isDev = true) {
+  constructor(module, isDev = null) {
     this.module = module;
-    this.isDev = isDev;
+    // Use NODE_ENV to determine isDev if not explicitly passed
+    this.isDev = isDev !== null ? isDev : (process.env.NODE_ENV !== 'production');
     this.logsDir = path.join(__dirname, '../../logs');
     
     // Create logs directory if it doesn't exist
@@ -33,17 +34,28 @@ class Logger {
 
   log(level, message, meta = {}) {
     const log = this.format(level, message, meta);
-    const output = JSON.stringify(log);
+    const output = `[${log.timestamp}] [${log.level}] [${log.module}] ${log.message}`;
+    const jsonOutput = JSON.stringify(log);
 
-    // Console output
-    if (this.isDev) {
-      console.log(output);
+    // Always console output (enable visibility in all modes)
+    if (level === LEVELS.ERROR) {
+      console.error(output, meta);
+    } else if (level === LEVELS.WARN) {
+      console.warn(output, meta);
+    } else {
+      console.log(output, meta);
     }
 
     // File output (Phase 1: use proper logging service like Winston)
     if (level === LEVELS.ERROR) {
       const errorLog = path.join(this.logsDir, 'error.log');
-      fs.appendFileSync(errorLog, output + '\n');
+      fs.appendFileSync(errorLog, jsonOutput + '\n');
+    }
+    
+    // Log INFO, WARN, DEBUG to general log file in development
+    if (level === LEVELS.INFO || level === LEVELS.WARN || level === LEVELS.DEBUG) {
+      const generalLog = path.join(this.logsDir, 'app.log');
+      fs.appendFileSync(generalLog, jsonOutput + '\n');
     }
   }
 

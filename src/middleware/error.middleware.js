@@ -47,10 +47,22 @@ const errorHandler = (err, req, res, next) => {
   let message = err.message || 'Internal Server Error';
   let details = err.details || undefined;
 
-  // Log the error
+  // Log the error with full details
   logger.error(`[${req.method} ${req.path}]`, err, {
     requestId: req.id,
     statusCode,
+    body: req.body,
+  });
+  
+  // Also log to console for immediate visibility
+  console.error('🔴 ERROR Details:', {
+    method: req.method,
+    path: req.path,
+    statusCode,
+    message,
+    errorMessage: err.message,
+    stack: err.stack,
+    requestId: req.id,
   });
 
   // Handle custom ApiError

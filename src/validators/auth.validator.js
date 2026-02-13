@@ -124,6 +124,18 @@ const verifyEmailQuerySchema = Joi.object({
   token: Joi.string().required(),
 });
 
+const resendVerificationEmailSchema = Joi.object({
+  email: Joi.string()
+    .email()
+    .required()
+    .trim()
+    .lowercase()
+    .messages({
+      'string.email': 'Must be a valid email address',
+      'string.empty': 'Email is required',
+    }),
+});
+
 const refreshTokenSchema = Joi.object({});
 
 const logoutSchema = Joi.object({});
@@ -135,6 +147,7 @@ module.exports = {
   resetPasswordSchema,
   resetPasswordTokenQuerySchema,
   verifyEmailQuerySchema,
+  resendVerificationEmailSchema,
   refreshTokenSchema,
   logoutSchema,
 };

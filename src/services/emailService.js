@@ -78,12 +78,20 @@ class EmailService {
    */
   async send(to, subject, template, variables = {}) {
     try {
+      logger.info(`📧 Sending email to ${to} - Template: ${template}`);
+      
       const htmlContent = this.loadTemplate(template);
       const compiledHtml = this.compileTemplate(htmlContent, variables);
 
       // If no API key, just log (development mode)
       if (!this.apiKey) {
-        logger.info(`[DEV MODE] Email sent to ${to} - Subject: ${subject}`);
+        logger.warn('⚠️  No Brevo API key configured. Running in DEV MODE - email not actually sent');
+        logger.info(`[DEV MODE] Email would be sent to ${to} - Subject: ${subject}`);
+        console.log('📧 DEV MODE EMAIL DETAILS:');
+        console.log(`   To: ${to}`);
+        console.log(`   Subject: ${subject}`);
+        console.log(`   Template: ${template}`);
+        console.log(`   Variables: `, variables);
         return {
           success: true,
           to,
@@ -95,6 +103,7 @@ class EmailService {
       }
 
       // Send via Brevo API
+      logger.info(`🔌 Connecting to Brevo API to send email...`);
       const response = await axios.post(
         `${this.apiUrl}/smtp/email`,
         {
@@ -121,7 +130,7 @@ class EmailService {
         }
       );
 
-      logger.info(`Email sent to ${to} - Subject: ${subject} - MessageID: ${response.data.messageId}`);
+      logger.info(`✅ Email sent successfully to ${to} - Subject: ${subject} - MessageID: ${response.data.messageId}`);
 
       return {
         success: true,
@@ -132,7 +141,18 @@ class EmailService {
         timestamp: new Date(),
       };
     } catch (err) {
-      logger.error(`Failed to send email to ${to}`, err.response?.data || err.message);
+      const errorDetails = err.response?.data || err.message;
+      logger.error(`❌ Failed to send email to ${to}`, err, {
+        template,
+        subject,
+        errorDetails,
+      });
+      console.error('Email service error details:', {
+        status: err.response?.status,
+        statusText: err.response?.statusText,
+        data: err.response?.data,
+        message: err.message,
+      });
       throw new ApiError(500, 'Failed to send email');
     }
   }
@@ -251,14 +271,26 @@ class EmailService {
    * Email verification (magic link only)
    */
   async sendEmailVerificationLink(user, { verifyLink, expiresInMinutes }) {
-    return this.send(user.email, 'Verify your email address', 'verify-email', {
-      firstName: user.firstName || 'User',
-      verifyLink,
-      expiresInMinutes,
-      supportEmail: env.SUPPORT_EMAIL || 'support@universitycbt.com',
-      appUrl: env.APP_URL || this.baseUrl,
-      baseUrl: this.baseUrl,
-    });
+    try {
+      logger.info(`📧 Attempting to send verification email to ${user.email}`);
+      logger.info(`Verification link: ${verifyLink}`);
+      logger.info(`Expires in: ${expiresInMinutes} minutes`);
+      
+      const result = await this.send(user.email, 'Verify your email address', 'verify-email', {
+        firstName: user.firstName || 'User',
+        verifyLink,
+        expiresInMinutes,
+        supportEmail: env.SUPPORT_EMAIL || 'support@universitycbt.com',
+        appUrl: env.APP_URL || this.baseUrl,
+        baseUrl: this.baseUrl,
+      });
+      
+      logger.info(`✅ Verification email result: ${JSON.stringify({ success: result.success, isDev: result.isDev })}`);
+      return result;
+    } catch (error) {
+      logger.error(`❌ Failed to send verification email to ${user.email}:`, error);
+      throw error;
+    }
   }
 
   /**

@@ -31,6 +31,7 @@ const env = {
   SUPPORT_EMAIL: process.env.SUPPORT_EMAIL || 'support@universitycbt.com',
   APP_URL: process.env.APP_URL || 'http://localhost:3000',
   BASE_URL: process.env.BASE_URL || 'http://localhost:3000',
+  BACKEND_URL: process.env.BACKEND_URL || 'http://localhost:3000',
   FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:5173',
   ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS || 'http://localhost:5173,http://localhost:3000',
 };

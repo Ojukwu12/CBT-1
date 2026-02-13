@@ -2,7 +2,7 @@ const express = require('express');
 const authController = require('../controllers/authController');
 const validate = require('../middleware/validate.middleware');
 const { verifyToken } = require('../middleware/auth.middleware');
-const { registerSchema, loginSchema, forgotPasswordSchema, resetPasswordSchema, resetPasswordTokenQuerySchema, verifyEmailQuerySchema, refreshTokenSchema, logoutSchema } = require('../validators/auth.validator');
+const { registerSchema, loginSchema, forgotPasswordSchema, resetPasswordSchema, resetPasswordTokenQuerySchema, verifyEmailQuerySchema, resendVerificationEmailSchema, refreshTokenSchema, logoutSchema } = require('../validators/auth.validator');
 
 const router = express.Router();
 
@@ -72,6 +72,17 @@ router.get(
   '/verify-email',
   validate(verifyEmailQuerySchema, 'query'),
   authController.verifyEmail
+);
+
+/**
+ * Resend verification email
+ * POST /api/auth/resend-verification-email
+ * Body: { email }
+ */
+router.post(
+  '/resend-verification-email',
+  validate(resendVerificationEmailSchema),
+  authController.resendVerificationEmail
 );
 
 /**

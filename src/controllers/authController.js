@@ -58,16 +58,20 @@ const register = asyncHandler(async (req, res, next) => {
 
   await user.save();
 
-  const verifyLink = `${env.BASE_URL || 'http://localhost:3000'}/api/auth/verify-email?token=${verifyToken}&email=${encodeURIComponent(email)}`;
+  const verifyLink = `${env.BACKEND_URL || 'http://localhost:3000'}/api/auth/verify-email?token=${verifyToken}&email=${encodeURIComponent(email)}`;
 
   // Send verification email
+  let emailSent = false;
   try {
-    await emailService.sendEmailVerificationLink(user, {
+    const result = await emailService.sendEmailVerificationLink(user, {
       verifyLink,
       expiresInMinutes: env.EMAIL_VERIFICATION_TOKEN_TTL_MINUTES || 60,
     });
+    emailSent = result.success;
+    logger.info(`Verification email sent to ${email}: ${emailSent}`);
   } catch (err) {
     logger.error('Verification email failed:', err);
+    logger.error('Error details:', { message: err.message, stack: err.stack });
   }
 
   // Send welcome email
@@ -86,7 +90,7 @@ const register = asyncHandler(async (req, res, next) => {
     plan: user.plan,
   });
 
-  logger.info(`User registered: ${email}`);
+  logger.info(`User registered: ${email} - Verification email sent: ${emailSent}`);
 
   res.status(201).json(
     new ApiResponse(201, {
@@ -101,7 +105,8 @@ const register = asyncHandler(async (req, res, next) => {
       },
       token,
       expiresIn: '7 days',
-    }, 'User registered successfully')
+      verificationEmailSent: emailSent,
+    }, emailSent ? 'User registered successfully. Verification email sent.' : 'User registered successfully. Please check spam folder or resend verification email.')
   );
 });
 
@@ -197,7 +202,7 @@ const forgotPassword = asyncHandler(async (req, res, next) => {
 
   await user.save();
 
-  const resetLink = `${env.BASE_URL || 'http://localhost:3000'}/api/auth/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
+  const resetLink = `${env.BACKEND_URL || 'http://localhost:3000'}/api/auth/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
 
   await emailService.sendPasswordResetOptionsEmail(user, {
     otp: resetOtp,
@@ -283,25 +288,24 @@ const verifyResetToken = asyncHandler(async (req, res, next) => {
  */
 const verifyEmail = asyncHandler(async (req, res, next) => {
   const { email, token } = req.query;
+  const frontendUrl = env.FRONTEND_URL || 'http://localhost:5173';
 
   const user = await User.findOne({ email }).select('+emailVerificationTokenHash');
   if (!user) {
-    return next(new ApiError(404, 'User not found'));
+    return res.redirect(`${frontendUrl}/email-verified?status=error&message=User not found`);
   }
 
   if (user.emailVerifiedAt) {
-    return res.status(200).json(
-      new ApiResponse(200, { email }, 'Email already verified')
-    );
+    return res.redirect(`${frontendUrl}/email-verified?status=success&message=Email already verified`);
   }
 
   const now = Date.now();
   if (!user.emailVerificationTokenHash || !user.emailVerificationTokenExpiresAt || user.emailVerificationTokenExpiresAt.getTime() <= now) {
-    return next(new ApiError(400, 'Verification link expired'));
+    return res.redirect(`${frontendUrl}/email-verified?status=error&message=Verification link expired`);
   }
 
   if (hashValue(token) !== user.emailVerificationTokenHash) {
-    return next(new ApiError(400, 'Invalid verification token'));
+    return res.redirect(`${frontendUrl}/email-verified?status=error&message=Invalid verification token`);
   }
 
   user.emailVerifiedAt = new Date();
@@ -309,9 +313,8 @@ const verifyEmail = asyncHandler(async (req, res, next) => {
   user.emailVerificationTokenExpiresAt = undefined;
   await user.save();
 
-  res.status(200).json(
-    new ApiResponse(200, { email }, 'Email verified successfully')
-  );
+  logger.info(`Email verified successfully for user: ${email}`);
+  res.redirect(`${frontendUrl}/email-verified?status=success&message=Email verified successfully`);
 });
 
 /**
@@ -387,6 +390,55 @@ const logout = asyncHandler(async (req, res, next) => {
 });
 
 /**
+ * Resend email verification link
+ * POST /api/auth/resend-verification-email
+ */
+const resendVerificationEmail = asyncHandler(async (req, res, next) => {
+  const { email } = req.body;
+
+  const user = await User.findOne({ email });
+  if (!user) {
+    return next(new ApiError(404, 'User not found'));
+  }
+
+  if (user.emailVerifiedAt) {
+    return res.status(400).json(
+      new ApiResponse(400, null, 'Email already verified')
+    );
+  }
+
+  // Generate new verification token
+  const verifyToken = crypto.randomBytes(32).toString('hex');
+  const verifyTokenExpiresAt = new Date(Date.now() + (env.EMAIL_VERIFICATION_TOKEN_TTL_MINUTES || 60) * 60 * 1000);
+
+  user.emailVerificationTokenHash = hashValue(verifyToken);
+  user.emailVerificationTokenExpiresAt = verifyTokenExpiresAt;
+  await user.save();
+
+  const verifyLink = `${env.BACKEND_URL || 'http://localhost:3000'}/api/auth/verify-email?token=${verifyToken}&email=${encodeURIComponent(email)}`;
+
+  // Send verification email
+  try {
+    const result = await emailService.sendEmailVerificationLink(user, {
+      verifyLink,
+      expiresInMinutes: env.EMAIL_VERIFICATION_TOKEN_TTL_MINUTES || 60,
+    });
+    logger.info(`Verification email resent to ${email}: ${result.success}`);
+    if (result.isDev) {
+      logger.warn('Running in DEV MODE - email not actually sent via Brevo');
+    }
+  } catch (err) {
+    logger.error('Failed to resend verification email:', err);
+    logger.error('Error details:', { message: err.message, stack: err.stack });
+    return next(new ApiError(500, 'Failed to send verification email'));
+  }
+
+  res.status(200).json(
+    new ApiResponse(200, null, 'Verification email sent successfully')
+  );
+});
+
+/**
  * Get current user (requires auth)
  * GET /api/auth/me
  */
@@ -412,4 +464,5 @@ module.exports = {
   verifyEmail,
   refreshToken,
   logout,
+  resendVerificationEmail,
 };
