@@ -18,7 +18,6 @@ const healthRoutes = require('./routes/health.routes');
 const authRoutes = require('./routes/auth.routes');
 const paymentRoutes = require('./routes/payment.routes');
 const universityRoutes = require('./routes/university.routes');
-const facultyRoutes = require('./routes/faculty.routes');
 const departmentRoutes = require('./routes/department.routes');
 const courseRoutes = require('./routes/course.routes');
 const topicRoutes = require('./routes/topic.routes');
@@ -94,8 +93,7 @@ app.use('/api/health', healthRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/universities', universityRoutes);
-app.use('/api/universities/:universityId/faculties', facultyRoutes);
-app.use('/api/faculties/:facultyId/departments', departmentRoutes);
+app.use('/api/universities/:universityId/departments', departmentRoutes);
 app.use('/api/departments/:departmentId/courses', courseRoutes);
 // Direct routes for easy access
 app.use('/api/courses', courseRoutes);

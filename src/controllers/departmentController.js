@@ -1,5 +1,5 @@
 const departmentService = require('../services/departmentService');
-const facultyService = require('../services/facultyService');
+const universityService = require('../services/universityService');
 const asyncHandler = require('../utils/asyncHandler');
 const validate = require('../middleware/validate.middleware');
 const { createDepartmentSchema, updateDepartmentSchema } = require('../validators/department.validator');
@@ -7,15 +7,14 @@ const { createDepartmentSchema, updateDepartmentSchema } = require('../validator
 const createDepartment = [
   validate(createDepartmentSchema),
   asyncHandler(async (req, res) => {
-    const { facultyId } = req.params;
-    const { universityId } = req.body;
+    const { universityId } = req.params;
 
-    await facultyService.getFacultyById(facultyId);
+    await universityService.getUniversityById(universityId);
 
-    const department = await departmentService.createDepartment(facultyId, {
-      ...req.body,
+    const department = await departmentService.createDepartment(
       universityId,
-    });
+      req.body
+    );
     res.status(201).json({
       success: true,
       data: department,
@@ -31,13 +30,13 @@ const getDepartment = asyncHandler(async (req, res) => {
   });
 });
 
-const listDepartmentsByFaculty = asyncHandler(async (req, res) => {
-  const { facultyId } = req.params;
+const listDepartmentsByUniversity = asyncHandler(async (req, res) => {
+  const { universityId } = req.params;
 
-  await facultyService.getFacultyById(facultyId);
+  await universityService.getUniversityById(universityId);
 
-  const departments = await departmentService.getDepartmentsByFaculty(
-    facultyId,
+  const departments = await departmentService.getDepartmentsByUniversity(
+    universityId,
     { isActive: true }
   );
   res.status(200).json({
@@ -64,6 +63,6 @@ const updateDepartment = [
 module.exports = {
   createDepartment,
   getDepartment,
-  listDepartmentsByFaculty,
+  listDepartmentsByUniversity,
   updateDepartment,
 };

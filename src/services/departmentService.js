@@ -1,23 +1,22 @@
 const Department = require('../models/Department');
 const ApiError = require('../utils/ApiError');
 
-const createDepartment = async (facultyId, departmentData) => {
+const createDepartment = async (universityId, departmentData) => {
   const existingDepartment = await Department.findOne({
-    facultyId,
+    universityId,
     code: departmentData.code,
   });
 
   if (existingDepartment) {
     throw new ApiError(
       409,
-      'Department with this code already exists in this faculty'
+      'Department with this code already exists in this university'
     );
   }
 
   const department = new Department({
     ...departmentData,
-    facultyId,
-    universityId: departmentData.universityId,
+    universityId,
   });
 
   return await department.save();
@@ -25,8 +24,7 @@ const createDepartment = async (facultyId, departmentData) => {
 
 const getDepartmentById = async (id) => {
   const department = await Department.findById(id)
-    .populate('universityId')
-    .populate('facultyId');
+    .populate('universityId');
 
   if (!department) {
     throw new ApiError(404, 'Department not found');
@@ -35,8 +33,8 @@ const getDepartmentById = async (id) => {
   return department;
 };
 
-const getDepartmentsByFaculty = async (facultyId, filters = {}) => {
-  const query = { facultyId, ...filters };
+const getDepartmentsByUniversity = async (universityId, filters = {}) => {
+  const query = { universityId, ...filters };
   return await Department.find(query).select('-__v');
 };
 
@@ -56,6 +54,6 @@ const updateDepartment = async (id, updateData) => {
 module.exports = {
   createDepartment,
   getDepartmentById,
-  getDepartmentsByFaculty,
+  getDepartmentsByUniversity,
   updateDepartment,
 };

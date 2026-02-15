@@ -8,12 +8,6 @@ const departmentSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
-    facultyId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Faculty',
-      required: true,
-      index: true,
-    },
     code: {
       type: String,
       required: true,
@@ -34,6 +28,6 @@ const departmentSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-departmentSchema.index({ facultyId: 1, code: 1 }, { unique: true });
+departmentSchema.index({ universityId: 1, code: 1 }, { unique: true });
 
 module.exports = mongoose.model('Department', departmentSchema);

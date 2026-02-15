@@ -2,7 +2,6 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const { env } = require('./src/config/env');
 const University = require('./src/models/University');
-const Faculty = require('./src/models/Faculty');
 const Department = require('./src/models/Department');
 const Course = require('./src/models/Course');
 const Topic = require('./src/models/Topic');
@@ -15,7 +14,6 @@ const seedDatabase = async () => {
 
     // Clear existing data
     await University.deleteMany({});
-    await Faculty.deleteMany({});
     await Department.deleteMany({});
     await Course.deleteMany({});
     await Topic.deleteMany({});
@@ -31,18 +29,9 @@ const seedDatabase = async () => {
     });
     console.log('✅ Created university:', university.name);
 
-    // Create Faculty
-    const faculty = await Faculty.create({
-      universityId: university._id,
-      code: 'sct',
-      name: 'School of Computing and Technology',
-    });
-    console.log('✅ Created faculty:', faculty.name);
-
     // Create Department
     const department = await Department.create({
       universityId: university._id,
-      facultyId: faculty._id,
       code: 'csc',
       name: 'Computer Science',
     });
