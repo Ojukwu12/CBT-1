@@ -6,7 +6,6 @@ const createCourseSchema = Joi.object({
   creditUnits: Joi.number().integer().min(1).max(10).required(),
   level: Joi.number().valid(100,200,300,400,500,600).required(),
   description: Joi.string().allow('').optional(),
-  universityId: Joi.string().required(),
 });
 
 const updateCourseSchema = Joi.object({

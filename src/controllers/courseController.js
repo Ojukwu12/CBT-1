@@ -8,13 +8,12 @@ const createCourse = [
   validate(createCourseSchema),
   asyncHandler(async (req, res) => {
     const { departmentId } = req.params;
-    const { universityId } = req.body;
 
-    await departmentService.getDepartmentById(departmentId);
+    const department = await departmentService.getDepartmentById(departmentId);
 
     const course = await courseService.createCourse(departmentId, {
       ...req.body,
-      universityId,
+      universityId: department.universityId,
     });
     res.status(201).json({
       success: true,
