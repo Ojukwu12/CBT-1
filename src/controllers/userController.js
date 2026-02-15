@@ -2,7 +2,8 @@ const bcrypt = require('bcryptjs');
 const userService = require('../services/userService');
 const asyncHandler = require('../utils/asyncHandler');
 const validate = require('../middleware/validate.middleware');
-const { createUserSchema, upgradePlanSchema, downgradePlanSchema } = require('../validators/user.validator');
+const ApiError = require('../utils/ApiError');
+const { createUserSchema, changePlanSchema, upgradePlanSchema, downgradePlanSchema } = require('../validators/user.validator');
 
 const createUser = [
   validate(createUserSchema),
@@ -60,6 +61,43 @@ const listUsersByUniversity = asyncHandler(async (req, res) => {
   });
 });
 
+// Unified endpoint: accepts any plan and intelligently upgrades/downgrades
+const changePlan = [
+  validate(changePlanSchema),
+  asyncHandler(async (req, res) => {
+    const { userId } = req.params;
+    const { plan: newPlan, expiryDays = 30 } = req.body;
+
+    // Get current user to check their existing plan
+    const user = await userService.getUserById(userId);
+    if (!user) {
+      throw new ApiError(404, 'User not found');
+    }
+
+    const currentPlan = user.plan || 'free';
+    const planHierarchy = { 'free': 0, 'basic': 1, 'premium': 2 };
+    const isUpgrade = planHierarchy[newPlan] > planHierarchy[currentPlan];
+    const isDowngrade = planHierarchy[newPlan] < planHierarchy[currentPlan];
+
+    let updatedUser;
+    if (isUpgrade) {
+      updatedUser = await userService.upgradePlan(userId, newPlan, expiryDays);
+    } else if (isDowngrade) {
+      updatedUser = await userService.downgradePlan(userId, newPlan);
+    } else {
+      // Plan is the same, just return user
+      updatedUser = user;
+    }
+
+    const action = isUpgrade ? 'upgraded to' : isDowngrade ? 'downgraded to' : 'plan changed to';
+    res.status(200).json({
+      success: true,
+      data: updatedUser,
+      message: `User ${action} ${newPlan} plan`,
+    });
+  })
+];
+
 const upgradePlan = [
   validate(upgradePlanSchema),
   asyncHandler(async (req, res) => {
@@ -95,6 +133,7 @@ module.exports = {
   getUser,
   getUserByEmail,
   listUsersByUniversity,
+  changePlan,
   upgradePlan,
   downgradePlan,
 };

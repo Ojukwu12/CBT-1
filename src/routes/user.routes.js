@@ -28,6 +28,9 @@ router.post('/', isAdmin, userController.createUser);
 router.get('/email/:email', isAdmin, userController.getUserByEmail);
 router.get('/university/:universityId', isAdmin, userController.listUsersByUniversity);
 router.get('/:id', isSelfOrAdmin, userController.getUser);
+// Unified endpoint - accepts any plan (free/basic/premium) and intelligently upgrades/downgrades
+router.post('/:userId/change-plan', isAdmin, userController.changePlan);
+// Legacy endpoints - kept for backward compatibility
 router.post('/:userId/upgrade-plan', isAdmin, userController.upgradePlan);
 router.post('/:userId/downgrade-plan', isAdmin, userController.downgradePlan);
 
