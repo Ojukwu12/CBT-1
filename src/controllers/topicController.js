@@ -8,13 +8,12 @@ const createTopic = [
   validate(createTopicSchema),
   asyncHandler(async (req, res) => {
     const { courseId } = req.params;
-    const { universityId } = req.body;
 
-    await courseService.getCourseById(courseId);
+    const course = await courseService.getCourseById(courseId);
 
     const topic = await topicService.createTopic(courseId, {
       ...req.body,
-      universityId,
+      universityId: course.universityId,
     });
     res.status(201).json({
       success: true,
