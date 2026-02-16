@@ -29,6 +29,14 @@ const createUser = [
   })
 ];
 
+const getMe = asyncHandler(async (req, res) => {
+  const user = await userService.getUserById(req.user.id);
+  res.status(200).json({
+    success: true,
+    data: user,
+  });
+});
+
 const getUser = asyncHandler(async (req, res) => {
   const user = await userService.getUserById(req.params.id);
   res.status(200).json({
@@ -130,6 +138,7 @@ const downgradePlan = [
 
 module.exports = {
   createUser,
+  getMe,
   getUser,
   getUserByEmail,
   listUsersByUniversity,

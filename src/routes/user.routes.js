@@ -24,6 +24,8 @@ const isSelfOrAdmin = (req, res, next) => {
 
 router.use(verifyToken);
 
+// Get current authenticated user's profile
+router.get('/me', userController.getMe);
 router.post('/', isAdmin, userController.createUser);
 router.get('/email/:email', isAdmin, userController.getUserByEmail);
 router.get('/university/:universityId', isAdmin, userController.listUsersByUniversity);
