@@ -258,54 +258,88 @@ const changeUserRole = asyncHandler(async (req, res) => {
  * Downgrade user plan
  * POST /api/admin/users/:userId/downgrade-plan
  */
-const downgradePlan = asyncHandler(async (req, res) => {
+/**
+ * Change user plan (unified endpoint)
+ * POST /api/admin/users/:userId/change-plan
+ * Admin selects any plan (free/basic/premium) and system handles upgrade/downgrade
+ */
+const changePlan = asyncHandler(async (req, res) => {
   const { userId } = req.params;
-  const { reason = 'Policy violation' } = req.body;
+  const { plan: newPlan, expiryDays = 30, reason } = req.body;
 
   const user = await User.findById(userId).select('-password');
   if (!user) {
     throw new ApiError(404, 'User not found');
   }
 
-  const oldPlan = user.plan;
-  user.plan = 'free';
-  user.planExpiresAt = null;
+  const currentPlan = user.plan || 'free';
+  
+  // If same plan, return success without change
+  if (currentPlan === newPlan) {
+    return res.status(200).json(
+      new ApiResponse(200, user, `User is already on ${newPlan} plan`)
+    );
+  }
+
+  const planHierarchy = { 'free': 0, 'basic': 1, 'premium': 2 };
+  const isUpgrade = planHierarchy[newPlan] > planHierarchy[currentPlan];
+  
+  // Update plan
+  user.plan = newPlan;
+  
+  if (isUpgrade) {
+    // Set expiry for upgrades
+    user.planExpiresAt = new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000);
+  } else {
+    // Clear expiry for downgrades to free
+    user.planExpiresAt = null;
+  }
 
   await user.save();
 
   // Send notification email
   try {
+    const emailTemplate = isUpgrade ? 'plan-upgrade-admin' : 'plan-downgrade-admin';
     await emailService.send(
       user.email,
-      'Plan Downgraded',
-      'plan-downgrade-admin',
+      `Plan ${isUpgrade ? 'Upgraded' : 'Downgraded'}`,
+      emailTemplate,
       {
         firstName: user.firstName,
-        oldPlan,
-        newPlan: 'free',
-        reason,
+        oldPlan: currentPlan,
+        newPlan,
+        reason: reason || '',
+        expiryDays: isUpgrade ? expiryDays : null,
         appUrl: env.APP_URL || 'http://localhost:3000',
       }
     );
   } catch (err) {
-    logger.error('Plan downgrade notification email failed:', err);
+    logger.error(`Plan change notification email failed for user ${userId}:`, err);
+    // Don't throw error, plan was changed successfully
   }
 
-  logger.info(`User plan downgraded: ${user.email} - ${oldPlan} -> free`);
+  logger.info(`User plan changed: ${user.email} - ${currentPlan} -> ${newPlan}`);
 
-  // Log plan downgrade
+  // Log plan change
   await auditLogService.logPlanDowngrade(
     userId,
-    oldPlan,
-    'free',
-    reason,
+    currentPlan,
+    newPlan,
+    reason || 'Plan change via admin',
     req.user.id
   );
 
+  const action = isUpgrade ? 'upgraded to' : 'downgraded to';
   res.status(200).json(
-    new ApiResponse(200, user, 'User plan downgraded to free successfully')
+    new ApiResponse(200, user, `User ${action} ${newPlan} plan successfully`)
   );
 });
+
+/**
+ * Downgrade user plan (legacy endpoint)
+ * POST /api/admin/users/:userId/downgrade-plan
+ * Deprecated: Use /change-plan instead
+ */
 
 /**
  * Send notification email to user by admin
@@ -356,6 +390,7 @@ module.exports = {
   banUser,
   unbanUser,
   changeUserRole,
+  changePlan,
   downgradePlan,
   sendNotificationToUser,
 };

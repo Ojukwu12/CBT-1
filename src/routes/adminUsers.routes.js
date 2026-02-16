@@ -41,6 +41,12 @@ const downgradePlanSchema = Joi.object({
   reason: Joi.string().optional().default('Policy violation'),
 });
 
+const changePlanSchema = Joi.object({
+  plan: Joi.string().valid('free', 'basic', 'premium').required(),
+  expiryDays: Joi.number().integer().min(1).max(365).optional().default(30),
+  reason: Joi.string().optional(),
+});
+
 const sendNotificationSchema = Joi.object({
   subject: Joi.string().required().min(5).max(100),
   message: Joi.string().required().min(10).max(1000),
@@ -54,6 +60,9 @@ router.post('/:userId/ban', verifyToken, isAdmin, validate(userIdSchema, 'params
 router.post('/:userId/unban', verifyToken, isAdmin, validate(userIdSchema, 'params'), AdminUserController.unbanUser);
 
 router.post('/:userId/role', verifyToken, isAdmin, validate(userIdSchema, 'params'), validate(roleChangeSchema), AdminUserController.changeUserRole);
+// Unified plan change endpoint - admin selects any available plan
+router.post('/:userId/change-plan', verifyToken, isAdmin, validate(userIdSchema, 'params'), validate(changePlanSchema), AdminUserController.changePlan);
+// Legacy endpoint for backward compatibility
 router.post('/:userId/downgrade-plan', verifyToken, isAdmin, validate(userIdSchema, 'params'), validate(downgradePlanSchema), AdminUserController.downgradePlan);
 
 router.post('/:userId/send-notification', verifyToken, isAdmin, validate(userIdSchema, 'params'), validate(sendNotificationSchema), AdminUserController.sendNotificationToUser);
