@@ -361,6 +361,82 @@ const changePlan = asyncHandler(async (req, res) => {
  * POST /api/admin/users/:userId/downgrade-plan
  * Deprecated: Use /change-plan instead
  */
+const downgradePlan = asyncHandler(async (req, res) => {
+  const { userId } = req.params;
+  const { reason } = req.body;
+
+  const user = await User.findById(userId).select('-password');
+  if (!user) {
+    throw new ApiError(404, 'User not found');
+  }
+
+  const currentPlan = user.plan || 'free';
+  
+  // If already free, no change
+  if (currentPlan === 'free') {
+    return res.status(200).json(
+      new ApiResponse(200, user, 'User is already on free plan')
+    );
+  }
+
+  // Archive current plan to previous plan tracking
+  user.previousPlan = currentPlan;
+  user.previousPlanExpiresAt = user.planExpiresAt;
+
+  // Add to plan history
+  if (!user.planHistory) {
+    user.planHistory = [];
+  }
+
+  user.planHistory.push({
+    plan: currentPlan,
+    startDate: user.planStartDate || new Date(user.createdAt),
+    endDate: new Date(),
+    expiryDate: user.planExpiresAt,
+    changedAt: new Date(),
+    changedBy: req.user.id,
+  });
+
+  // Downgrade to free plan - no expiry
+  user.plan = 'free';
+  user.planStartDate = new Date();
+  user.planExpiresAt = null;
+
+  await user.save();
+
+  // Send notification email
+  try {
+    await emailService.send(
+      user.email,
+      'Plan Downgraded',
+      'plan-downgrade-admin',
+      {
+        firstName: user.firstName,
+        oldPlan: currentPlan,
+        newPlan: 'free',
+        reason: reason || 'Plan downgrade',
+        appUrl: env.APP_URL || 'http://localhost:3000',
+      }
+    );
+  } catch (err) {
+    logger.error(`Plan downgrade notification email failed for user ${userId}:`, err);
+  }
+
+  logger.info(`User plan downgraded to free: ${user.email}`);
+
+  // Log plan downgrade
+  await auditLogService.logPlanDowngrade(
+    userId,
+    currentPlan,
+    'free',
+    reason || 'Plan downgrade via admin',
+    req.user.id
+  );
+
+  res.status(200).json(
+    new ApiResponse(200, user, 'User downgraded to free plan successfully')
+  );
+});
 
 /**
  * Send notification email to user by admin

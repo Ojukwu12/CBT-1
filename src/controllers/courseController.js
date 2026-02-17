@@ -70,10 +70,48 @@ const updateCourse = [
   })
 ];
 
+/**
+ * Get courses with study material counts
+ * GET /api/departments/:departmentId/courses/with-materials
+ * Returns courses including count of available study materials for each
+ */
+const listCoursesWithMaterialCounts = asyncHandler(async (req, res) => {
+  const { departmentId } = req.params;
+
+  await departmentService.getDepartmentById(departmentId);
+
+  const courses = await courseService.getCoursesByDepartment(departmentId, {
+    isActive: true,
+  });
+
+  // Get study material counts for each course
+  const StudyMaterial = require('../models/StudyMaterial');
+  const coursesWithCounts = await Promise.all(
+    courses.map(async (course) => {
+      const materialCount = await StudyMaterial.countDocuments({
+        courseId: course._id,
+        isActive: true,
+      });
+      return {
+        ...course.toObject ? course.toObject() : course,
+        studyMaterialCount: materialCount,
+      };
+    })
+  );
+
+  res.status(200).json({
+    success: true,
+    data: coursesWithCounts,
+    count: coursesWithCounts.length,
+    message: 'Courses with material counts retrieved successfully',
+  });
+});
+
 module.exports = {
   createCourse,
   getCourse,
   listCoursesByDepartment,
   listCoursesByLevel,
   updateCourse,
+  listCoursesWithMaterialCounts,
 };

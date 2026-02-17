@@ -17,6 +17,7 @@ router.post('/', verifyToken, isAdmin, courseController.createCourse);
 router.put('/:id', verifyToken, isAdmin, courseController.updateCourse);
 
 // Public routes
+router.get('/with-materials', courseController.listCoursesWithMaterialCounts);
 router.get('/', courseController.listCoursesByDepartment);
 router.get('/:id', courseController.getCourse);
 
