@@ -53,6 +53,8 @@ const sendNotificationSchema = Joi.object({
 });
 
 // Routes
+// Get current admin user's profile
+router.get('/me', verifyToken, isAdmin, AdminUserController.getMe);
 router.get('/', verifyToken, isAdmin, validate(getAllUsersSchema, 'query'), AdminUserController.getAllUsers);
 router.get('/:userId', verifyToken, isAdmin, validate(userIdSchema, 'params'), AdminUserController.getUser);
 router.get('/:userId/plan-history', verifyToken, isAdmin, validate(userIdSchema, 'params'), AdminUserController.getPlanHistory);

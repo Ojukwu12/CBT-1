@@ -506,6 +506,18 @@ const getPlanHistory = asyncHandler(async (req, res) => {
   );
 });
 
+/**
+ * Get current admin user's profile
+ * GET /api/admin/users/me
+ */
+const getMe = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.user.id).select('-password');
+  if (!user) {
+    throw new ApiError(404, 'User not found');
+  }
+  res.status(200).json(new ApiResponse(200, user, 'Current admin user retrieved successfully'));
+});
+
 module.exports = {
   getAllUsers,
   getUser,
@@ -516,4 +528,5 @@ module.exports = {
   downgradePlan,
   sendNotificationToUser,
   getPlanHistory,
+  getMe,
 };
