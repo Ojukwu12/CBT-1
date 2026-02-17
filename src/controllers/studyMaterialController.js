@@ -221,10 +221,74 @@ const rateStudyMaterial = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * Get study materials by hierarchical selection (university → department → course)
+ * GET /api/study-materials/hierarchy?universityId=&departmentId=&courseId=
+ * Allows users to drill down through the hierarchy to find materials
+ */
+const getStudyMaterialsByHierarchy = asyncHandler(async (req, res) => {
+  const { universityId, departmentId, courseId, topicId, page = 1, limit = 20, sortBy = 'createdAt' } = req.query;
+
+  if (!courseId) {
+    throw new ApiError(400, 'courseId is required');
+  }
+
+  // Verify course exists and belongs to the specified department and university
+  const Course = require('../models/Course');
+  const course = await Course.findById(courseId)
+    .populate('departmentId', 'universityId')
+    .lean();
+
+  if (!course) {
+    throw new ApiError(404, 'Course not found');
+  }
+
+  // Validate hierarchy if provided
+  if (departmentId && course.departmentId._id.toString() !== departmentId) {
+    throw new ApiError(400, 'Course does not belong to the specified department');
+  }
+
+  if (universityId && course.departmentId.universityId.toString() !== universityId) {
+    throw new ApiError(400, 'Course does not belong to the specified university');
+  }
+
+  const filters = {
+    courseId,
+    isActive: true,
+  };
+
+  if (topicId) {
+    filters.topicId = topicId;
+  }
+
+  const skip = (page - 1) * limit;
+  const [materials, total] = await Promise.all([
+    StudyMaterial.find(filters)
+      .sort({ [sortBy]: -1 })
+      .skip(skip)
+      .limit(parseInt(limit))
+      .lean(),
+    StudyMaterial.countDocuments(filters),
+  ]);
+
+  res.status(200).json({
+    success: true,
+    data: materials,
+    pagination: {
+      page: parseInt(page),
+      limit: parseInt(limit),
+      total,
+      pages: Math.ceil(total / limit),
+    },
+    message: 'Study materials retrieved successfully',
+  });
+});
+
 module.exports = {
   uploadStudyMaterial,
   listStudyMaterials,
   getStudyMaterial,
   downloadStudyMaterial,
   rateStudyMaterial,
+  getStudyMaterialsByHierarchy,
 };

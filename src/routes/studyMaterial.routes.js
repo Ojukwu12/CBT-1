@@ -15,6 +15,9 @@ const isAdmin = (req, res, next) => {
 
 router.use(verifyToken);
 
+// List study materials by hierarchy (university → department → course)
+router.get('/hierarchy/browse', studyMaterialController.getStudyMaterialsByHierarchy);
+
 // Upload study material (admin/faculty only)
 router.post('/:courseId/upload', isAdmin, upload.single('file'), studyMaterialController.uploadStudyMaterial);
 
