@@ -14,6 +14,7 @@ const auditLogService = require('../services/auditLogService');
 const User = require('../models/User');
 const Transaction = require('../models/Transaction');
 const PromoCode = require('../models/PromoCode');
+const PlanPricing = require('../models/PlanPricing');
 
 const logger = new Logger('PaymentController');
 
@@ -301,15 +302,28 @@ const verifyPayment = asyncHandler(async (req, res) => {
  * GET /api/payments/plans
  */
 const getPlans = asyncHandler(async (req, res) => {
-  const plans = paystackService.getPlanPricing();
+  // Get plans from database
+  const pricingRecords = await PlanPricing.find({ isActive: true }).sort({ plan: 1 });
+  
+  // If no plans in database, return error instead of fallback
+  if (pricingRecords.length === 0) {
+    throw new ApiError(404, 'No pricing plans configured');
+  }
 
-  const plansWithFeatures = Object.entries(plans).map(([key, value]) => ({
-    id: key,
-    ...value,
+  // Format plans with all admin-configured details
+  const plans = pricingRecords.map(record => ({
+    id: record.plan,
+    plan: record.plan,
+    name: record.name,
+    price: record.price,
+    duration: record.duration,
+    features: record.features,
+    description: record.description,
+    isActive: record.isActive,
   }));
 
   res.status(200).json(
-    new ApiResponse(200, plansWithFeatures, 'Payment plans retrieved')
+    new ApiResponse(200, plans, 'Payment plans retrieved')
   );
 });
 
