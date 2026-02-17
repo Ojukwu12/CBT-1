@@ -29,7 +29,24 @@ const userSchema = new mongoose.Schema(
       default: 'free',
       index: true,
     },
+    planStartDate: Date,
     planExpiresAt: Date,
+    previousPlan: {
+      type: String,
+      enum: ['free', 'basic', 'premium'],
+    },
+    previousPlanExpiresAt: Date,
+    planHistory: [{
+      plan: { type: String, enum: ['free', 'basic', 'premium'] },
+      startDate: Date,
+      endDate: Date,
+      expiryDate: Date,
+      changedAt: Date,
+      changedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+      },
+    }],
     isActive: {
       type: Boolean,
       default: true,

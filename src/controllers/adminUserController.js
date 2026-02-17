@@ -284,8 +284,29 @@ const changePlan = asyncHandler(async (req, res) => {
   const planHierarchy = { 'free': 0, 'basic': 1, 'premium': 2 };
   const isUpgrade = planHierarchy[newPlan] > planHierarchy[currentPlan];
   
+  // Archive current plan to previous plan tracking
+  if (currentPlan !== 'free') {
+    user.previousPlan = currentPlan;
+    user.previousPlanExpiresAt = user.planExpiresAt;
+  }
+
+  // Add to plan history
+  if (!user.planHistory) {
+    user.planHistory = [];
+  }
+
+  user.planHistory.push({
+    plan: currentPlan,
+    startDate: user.planStartDate || new Date(user.createdAt),
+    endDate: new Date(),
+    expiryDate: user.planExpiresAt,
+    changedAt: new Date(),
+    changedBy: req.user.id,
+  });
+
   // Update plan
   user.plan = newPlan;
+  user.planStartDate = new Date(); // Track when new plan started
   
   if (isUpgrade) {
     // Set expiry for upgrades
@@ -384,6 +405,31 @@ const sendNotificationToUser = asyncHandler(async (req, res) => {
   );
 });
 
+/**
+ * Get user plan history
+ * GET /api/admin/users/:userId/plan-history
+ */
+const getPlanHistory = asyncHandler(async (req, res) => {
+  const { userId } = req.params;
+
+  const user = await User.findById(userId).select('planHistory previousPlan previousPlanExpiresAt plan planExpiresAt');
+  if (!user) {
+    throw new ApiError(404, 'User not found');
+  }
+
+  const planHistory = {
+    currentPlan: user.plan || 'free',
+    currentPlanExpiresAt: user.planExpiresAt,
+    previousPlan: user.previousPlan,
+    previousPlanExpiresAt: user.previousPlanExpiresAt,
+    allTransitions: user.planHistory || []
+  };
+
+  res.status(200).json(
+    new ApiResponse(200, planHistory, 'Plan history retrieved successfully')
+  );
+});
+
 module.exports = {
   getAllUsers,
   getUser,
@@ -393,4 +439,5 @@ module.exports = {
   changePlan,
   downgradePlan,
   sendNotificationToUser,
+  getPlanHistory,
 };

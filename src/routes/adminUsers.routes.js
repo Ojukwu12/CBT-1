@@ -55,6 +55,7 @@ const sendNotificationSchema = Joi.object({
 // Routes
 router.get('/', verifyToken, isAdmin, validate(getAllUsersSchema, 'query'), AdminUserController.getAllUsers);
 router.get('/:userId', verifyToken, isAdmin, validate(userIdSchema, 'params'), AdminUserController.getUser);
+router.get('/:userId/plan-history', verifyToken, isAdmin, validate(userIdSchema, 'params'), AdminUserController.getPlanHistory);
 
 router.post('/:userId/ban', verifyToken, isAdmin, validate(userIdSchema, 'params'), validate(banUserSchema), AdminUserController.banUser);
 router.post('/:userId/unban', verifyToken, isAdmin, validate(userIdSchema, 'params'), AdminUserController.unbanUser);
