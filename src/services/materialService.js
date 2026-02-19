@@ -11,8 +11,8 @@ const ApiError = require('../utils/ApiError');
 
 const TARGET_QUESTION_COUNT = 20;
 const MAX_AI_ATTEMPTS = 2;
-const AI_GENERATION_ATTEMPT_TIMEOUT_MS = 30 * 1000;
-const AI_GENERATION_TOTAL_TIMEOUT_MS = 55 * 1000;
+const AI_GENERATION_ATTEMPT_TIMEOUT_MS = 50 * 1000;
+const AI_GENERATION_TOTAL_TIMEOUT_MS = 58 * 1000;
 
 const withTimeout = async (promise, timeoutMs, timeoutMessage) => {
   let timeoutId;

@@ -39,7 +39,7 @@ const generateQuestions = async (
     .filter(Boolean);
 
   const uniqueProviders = Array.from(new Set(providers));
-  const providerTimeoutMs = parseInt(process.env.AI_PROVIDER_TIMEOUT_MS || '20000', 10);
+  const providerTimeoutMs = parseInt(process.env.AI_PROVIDER_TIMEOUT_MS || '40000', 10);
 
   if (uniqueProviders.length === 0) {
     throw new Error('No AI provider configured');
@@ -61,12 +61,16 @@ const generateQuestions = async (
     }
 
     try {
-      return await withTimeout(
+      console.log(`[AI Generation] Attempting provider: ${provider} (timeout: ${providerTimeoutMs}ms)`);
+      const result = await withTimeout(
         handler(materialContent, courseCode, topicName, difficulty, options),
         providerTimeoutMs,
         `${provider} provider timed out`
       );
+      console.log(`[AI Generation] Success with provider: ${provider}`);
+      return result;
     } catch (err) {
+      console.error(`[AI Generation] Failed with provider ${provider}:`, err.message);
       lastError = err;
     }
   }
