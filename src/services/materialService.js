@@ -11,6 +11,24 @@ const ApiError = require('../utils/ApiError');
 
 const TARGET_QUESTION_COUNT = 20;
 const MAX_AI_ATTEMPTS = 3;
+const AI_GENERATION_ATTEMPT_TIMEOUT_MS = 30 * 1000;
+const AI_GENERATION_TOTAL_TIMEOUT_MS = 55 * 1000;
+
+const withTimeout = async (promise, timeoutMs, timeoutMessage) => {
+  let timeoutId;
+
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new ApiError(504, timeoutMessage));
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    clearTimeout(timeoutId);
+  }
+};
 
 const normalizeQuestionText = (value = '') =>
   String(value)
@@ -284,17 +302,27 @@ const generateQuestionsFromMaterial = async (
       topicId: material.topicId,
     });
 
+    const generationDeadline = Date.now() + AI_GENERATION_TOTAL_TIMEOUT_MS;
     const deduplicatedQuestions = [];
     for (let attempt = 0; attempt < MAX_AI_ATTEMPTS && deduplicatedQuestions.length < TARGET_QUESTION_COUNT; attempt += 1) {
-      const generatedQuestions = await generateQuestions(
-        material.content,
-        course.code,
-        topicName,
-        difficulty,
-        {
-          questionCount: TARGET_QUESTION_COUNT,
-          excludedQuestionTexts: Array.from(existingQuestionTextSet),
-        }
+      const remainingMs = generationDeadline - Date.now();
+      if (remainingMs <= 0) {
+        throw new ApiError(504, 'Question generation timed out before completion');
+      }
+
+      const generatedQuestions = await withTimeout(
+        generateQuestions(
+          material.content,
+          course.code,
+          topicName,
+          difficulty,
+          {
+            questionCount: TARGET_QUESTION_COUNT,
+            excludedQuestionTexts: Array.from(existingQuestionTextSet),
+          }
+        ),
+        Math.min(AI_GENERATION_ATTEMPT_TIMEOUT_MS, remainingMs),
+        'Question generation timed out while contacting AI provider'
       );
 
       const uniqueBatch = filterUniqueQuestions(generatedQuestions, existingQuestionTextSet);
