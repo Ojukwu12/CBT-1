@@ -6,7 +6,7 @@ const asyncHandler = require('../utils/asyncHandler');
 const validate = require('../middleware/validate.middleware');
 const { uploadMaterialSchema, generateQuestionsSchema, importQuestionsSchema } = require('../validators/material.validator');
 const storageService = require('../services/storageService');
-const mime = require('mime-types');
+const { extractTextFromMaterial } = require('../utils/fileExtraction');
 const ApiError = require('../utils/ApiError');
 
 const getGenerationMode = (value) => {
@@ -33,7 +33,7 @@ const uploadSourceMaterial = [
     const { courseId } = req.params;
     const { title, description, fileType, fileUrl, fileSize, content, topicId, extractionMethod = 'ocr' } = req.body;
 
-    const user = await userService.getUserById(req.user.id);
+    await userService.getUserById(req.user.id);
 
     // Get course to derive universityId and departmentId
     const course = await courseService.getCourseById(courseId);
@@ -43,10 +43,9 @@ const uploadSourceMaterial = [
 
     let finalFileUrl = fileUrl;
     let finalFileSize = fileSize;
-    let fileBuffer = null;
+    let extractedContent = content;
 
     if (req.file) {
-      fileBuffer = req.file.buffer;
       const uploadResult = await storageService.uploadBuffer({
         buffer: req.file.buffer,
         fileName: req.file.originalname,
@@ -54,6 +53,13 @@ const uploadSourceMaterial = [
       });
       finalFileUrl = uploadResult.fileUrl;
       finalFileSize = uploadResult.fileSize;
+
+      if (!extractedContent) {
+        extractedContent = await extractTextFromMaterial({
+          fileBuffer: req.file.buffer,
+          fileType,
+        });
+      }
     }
 
     if (!req.file && !finalFileUrl && !content) {
@@ -70,7 +76,7 @@ const uploadSourceMaterial = [
       fileType,
       fileUrl: finalFileUrl,
       fileSize: finalFileSize,
-      content,
+      content: extractedContent,
       uploadedBy: req.user.id,
       extractionMethod,
       processingStatus: 'uploaded',
