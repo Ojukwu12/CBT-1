@@ -36,6 +36,26 @@ const searchRoutes = require('./routes/search.routes');
 
 const app = express();
 
+const parseTrustProxy = (value) => {
+  if (value === undefined) return undefined;
+  const normalized = String(value).trim().toLowerCase();
+
+  if (normalized === 'true') return 1;
+  if (normalized === 'false') return false;
+
+  const numericValue = Number(normalized);
+  if (!Number.isNaN(numericValue)) return numericValue;
+
+  return value;
+};
+
+const trustProxy = parseTrustProxy(process.env.TRUST_PROXY);
+if (trustProxy !== undefined) {
+  app.set('trust proxy', trustProxy);
+} else if (env.NODE_ENV === 'production' || process.env.RENDER) {
+  app.set('trust proxy', 1);
+}
+
 // Security & Performance middleware
 app.use(helmet({
   // Additional security headers
