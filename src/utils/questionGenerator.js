@@ -9,6 +9,24 @@ const PROVIDERS = {
 
 const normalizeProvider = (provider) => (provider || '').trim().toLowerCase();
 
+const withTimeout = async (promise, timeoutMs, timeoutMessage) => {
+  let timeoutId;
+
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => {
+      const error = new Error(timeoutMessage);
+      error.statusCode = 504;
+      reject(error);
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    clearTimeout(timeoutId);
+  }
+};
+
 const generateQuestions = async (
   materialContent,
   courseCode,
@@ -21,6 +39,7 @@ const generateQuestions = async (
     .filter(Boolean);
 
   const uniqueProviders = Array.from(new Set(providers));
+  const providerTimeoutMs = parseInt(process.env.AI_PROVIDER_TIMEOUT_MS || '20000', 10);
 
   if (uniqueProviders.length === 0) {
     throw new Error('No AI provider configured');
@@ -42,7 +61,11 @@ const generateQuestions = async (
     }
 
     try {
-      return await handler(materialContent, courseCode, topicName, difficulty, options);
+      return await withTimeout(
+        handler(materialContent, courseCode, topicName, difficulty, options),
+        providerTimeoutMs,
+        `${provider} provider timed out`
+      );
     } catch (err) {
       lastError = err;
     }

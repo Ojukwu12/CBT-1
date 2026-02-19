@@ -10,7 +10,7 @@ const { env } = require('../config/env');
 const ApiError = require('../utils/ApiError');
 
 const TARGET_QUESTION_COUNT = 20;
-const MAX_AI_ATTEMPTS = 3;
+const MAX_AI_ATTEMPTS = 2;
 const AI_GENERATION_ATTEMPT_TIMEOUT_MS = 30 * 1000;
 const AI_GENERATION_TOTAL_TIMEOUT_MS = 55 * 1000;
 
@@ -304,26 +304,35 @@ const generateQuestionsFromMaterial = async (
 
     const generationDeadline = Date.now() + AI_GENERATION_TOTAL_TIMEOUT_MS;
     const deduplicatedQuestions = [];
+    let lastGenerationError = null;
     for (let attempt = 0; attempt < MAX_AI_ATTEMPTS && deduplicatedQuestions.length < TARGET_QUESTION_COUNT; attempt += 1) {
       const remainingMs = generationDeadline - Date.now();
       if (remainingMs <= 0) {
         throw new ApiError(504, 'Question generation timed out before completion');
       }
 
-      const generatedQuestions = await withTimeout(
-        generateQuestions(
-          material.content,
-          course.code,
-          topicName,
-          difficulty,
-          {
-            questionCount: TARGET_QUESTION_COUNT,
-            excludedQuestionTexts: Array.from(existingQuestionTextSet),
-          }
-        ),
-        Math.min(AI_GENERATION_ATTEMPT_TIMEOUT_MS, remainingMs),
-        'Question generation timed out while contacting AI provider'
-      );
+      const remainingQuestionCount = TARGET_QUESTION_COUNT - deduplicatedQuestions.length;
+
+      let generatedQuestions;
+      try {
+        generatedQuestions = await withTimeout(
+          generateQuestions(
+            material.content,
+            course.code,
+            topicName,
+            difficulty,
+            {
+              questionCount: remainingQuestionCount,
+              excludedQuestionTexts: Array.from(existingQuestionTextSet),
+            }
+          ),
+          Math.min(AI_GENERATION_ATTEMPT_TIMEOUT_MS, remainingMs),
+          'Question generation timed out while contacting AI provider'
+        );
+      } catch (error) {
+        lastGenerationError = error;
+        continue;
+      }
 
       const uniqueBatch = filterUniqueQuestions(generatedQuestions, existingQuestionTextSet);
       if (!uniqueBatch.length) {
@@ -335,6 +344,10 @@ const generateQuestionsFromMaterial = async (
 
     const selectedQuestions = deduplicatedQuestions.slice(0, TARGET_QUESTION_COUNT);
     if (!selectedQuestions.length) {
+      if (lastGenerationError) {
+        throw lastGenerationError;
+      }
+
       throw new ApiError(
         409,
         'Unable to generate new unique questions for this material. Try a different material or topic.'
