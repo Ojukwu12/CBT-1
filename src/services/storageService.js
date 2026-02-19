@@ -4,6 +4,7 @@ const { v4: uuidv4 } = require('uuid');
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 const mime = require('mime-types');
 const { env } = require('../config/env');
+const ApiError = require('../utils/ApiError');
 
 const getS3Client = () => {
   return new S3Client({
@@ -37,20 +38,36 @@ const uploadToLocal = async ({ buffer, fileName, mimeType }) => {
 
 const uploadToS3 = async ({ buffer, fileName, mimeType }) => {
   if (!env.S3_BUCKET || !env.S3_REGION || !env.S3_ACCESS_KEY_ID || !env.S3_SECRET_ACCESS_KEY) {
-    throw new Error('S3 storage is not fully configured');
+    throw new ApiError(500, 'S3 storage is not fully configured');
   }
 
   const key = `materials/${uuidv4()}-${fileName || 'upload'}`;
   const s3 = getS3Client();
 
-  await s3.send(
-    new PutObjectCommand({
-      Bucket: env.S3_BUCKET,
-      Key: key,
-      Body: buffer,
-      ContentType: mimeType || 'application/octet-stream',
-    })
-  );
+  try {
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: env.S3_BUCKET,
+        Key: key,
+        Body: buffer,
+        ContentType: mimeType || 'application/octet-stream',
+      })
+    );
+  } catch (error) {
+    const isAccessDenied =
+      error?.name === 'AccessDenied' ||
+      error?.Code === 'AccessDenied' ||
+      error?.$metadata?.httpStatusCode === 403;
+
+    if (isAccessDenied) {
+      throw new ApiError(
+        403,
+        `S3 upload denied. Allow s3:PutObject on arn:aws:s3:::${env.S3_BUCKET}/materials/* for the configured IAM user.`
+      );
+    }
+
+    throw error;
+  }
 
   const fileUrl = `https://${env.S3_BUCKET}.s3.${env.S3_REGION}.amazonaws.com/${key}`;
   return {
