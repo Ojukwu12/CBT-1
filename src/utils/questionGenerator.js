@@ -9,6 +9,18 @@ const PROVIDERS = {
 
 const normalizeProvider = (provider) => (provider || '').trim().toLowerCase();
 
+const truncateContent = (content, maxChars = 15000) => {
+  if (!content || content.length <= maxChars) {
+    return content;
+  }
+  return content.substring(0, maxChars) + '\n\n[Content truncated for AI processing]';
+};
+
+const isRateLimitError = (error) => {
+  const status = error?.response?.status || error?.statusCode || error?.status;
+  return status === 429;
+};
+
 const withTimeout = async (promise, timeoutMs, timeoutMessage) => {
   let timeoutId;
 
@@ -34,6 +46,9 @@ const generateQuestions = async (
   difficulty = 'mixed',
   options = {}
 ) => {
+  const truncatedContent = truncateContent(materialContent);
+  console.log(`[AI Generation] Content size: ${materialContent?.length || 0} chars, truncated to: ${truncatedContent?.length || 0} chars`);
+  
   const providers = [env.AI_PROVIDER, env.AI_FALLBACK_PROVIDER]
     .map(normalizeProvider)
     .filter(Boolean);
@@ -63,7 +78,7 @@ const generateQuestions = async (
     try {
       console.log(`[AI Generation] Attempting provider: ${provider} (timeout: ${providerTimeoutMs}ms)`);
       const result = await withTimeout(
-        handler(materialContent, courseCode, topicName, difficulty, options),
+        handler(truncatedContent, courseCode, topicName, difficulty, options),
         providerTimeoutMs,
         `${provider} provider timed out`
       );
@@ -72,6 +87,12 @@ const generateQuestions = async (
     } catch (err) {
       console.error(`[AI Generation] Failed with provider ${provider}:`, err.message);
       lastError = err;
+      
+      // Skip to next provider immediately on hard rate limits
+      if (isRateLimitError(err)) {
+        console.log(`[AI Generation] Rate limit hit for ${provider}, skipping to next provider`);
+        continue;
+      }
     }
   }
 
