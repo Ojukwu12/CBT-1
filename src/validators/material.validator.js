@@ -11,6 +11,7 @@ const uploadMaterialSchema = Joi.object({
 
 const generateQuestionsSchema = Joi.object({
   difficulty: Joi.string().valid('easy','medium','hard','mixed').optional(),
+  fresh: Joi.boolean().optional(),
 });
 
 const importQuestionsSchema = Joi.object({

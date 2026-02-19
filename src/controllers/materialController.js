@@ -165,12 +165,13 @@ const generateQuestionsFromMaterial = [
   validate(generateQuestionsSchema),
   asyncHandler(async (req, res) => {
     const { materialId } = req.params;
-    const { difficulty = 'mixed' } = req.body;
+    const { difficulty = 'mixed', fresh = true } = req.body;
 
     const result = await materialService.generateQuestionsFromMaterial(
       materialId,
       req.user.id,
-      difficulty
+      difficulty,
+      fresh
     );
 
     if (result.missingAnswers) {

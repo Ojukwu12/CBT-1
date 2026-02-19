@@ -1,11 +1,57 @@
 const SourceMaterial = require('../models/SourceMaterial');
 const Question = require('../models/Question');
 const AIGenerationLog = require('../models/AIGenerationLog');
+const Course = require('../models/Course');
+const Topic = require('../models/Topic');
 const { generateQuestions } = require('../utils/questionGenerator');
 const { extractTextFromMaterial } = require('../utils/fileExtraction');
 const { detectQuestionBank } = require('../utils/questionBankDetector');
 const { env } = require('../config/env');
 const ApiError = require('../utils/ApiError');
+
+const TARGET_QUESTION_COUNT = 20;
+const MAX_AI_ATTEMPTS = 3;
+
+const normalizeQuestionText = (value = '') =>
+  String(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const filterUniqueQuestions = (questions, existingTextSet) => {
+  const unique = [];
+
+  for (const question of questions || []) {
+    const normalizedText = normalizeQuestionText(question?.text);
+    if (!normalizedText || existingTextSet.has(normalizedText)) {
+      continue;
+    }
+
+    existingTextSet.add(normalizedText);
+    unique.push(question);
+  }
+
+  return unique;
+};
+
+const getExistingQuestionTextSet = async ({ universityId, courseId, topicId }) => {
+  const existingQuestions = await Question.find({
+    universityId,
+    courseId,
+    topicId,
+    isActive: true,
+    status: { $in: ['pending', 'approved'] },
+  })
+    .select('text')
+    .lean();
+
+  return new Set(
+    existingQuestions
+      .map((question) => normalizeQuestionText(question.text))
+      .filter(Boolean)
+  );
+};
 
 const uploadMaterial = async (materialData) => {
   const { fileBuffer, mimeType, ...payload } = materialData;
@@ -46,7 +92,8 @@ const getMaterialsByCourse = async (courseId, filters = {}) => {
 const generateQuestionsFromMaterial = async (
   materialId,
   adminId,
-  difficulty = 'mixed'
+  difficulty = 'mixed',
+  fresh = true
 ) => {
   const startTime = Date.now();
 
@@ -74,7 +121,25 @@ const generateQuestionsFromMaterial = async (
     await material.save();
   }
 
-  const parsed = detectQuestionBank(material.content);
+  let parsed = detectQuestionBank(material.content);
+
+  if (!parsed.isQuestionBank && material.fileType === 'image' && material.fileUrl) {
+    const ocrAttemptContent = await extractTextFromMaterial({
+      fileUrl: material.fileUrl,
+      fileType: material.fileType,
+    });
+
+    if (ocrAttemptContent) {
+      const ocrParsed = detectQuestionBank(ocrAttemptContent);
+      if (ocrParsed.isQuestionBank) {
+        material.content = ocrAttemptContent;
+        material.extractionMethod = 'ocr';
+        await material.save();
+        parsed = ocrParsed;
+      }
+    }
+  }
+
   if (parsed.isQuestionBank) {
     if (parsed.missingAnswers > 0) {
       await SourceMaterial.findByIdAndUpdate(materialId, {
@@ -91,7 +156,7 @@ const generateQuestionsFromMaterial = async (
       };
     }
 
-    const course = await require('../models/Course').findById(material.courseId);
+    const course = await Course.findById(material.courseId);
     if (!course) {
       throw new ApiError(404, 'Course not found for material');
     }
@@ -100,7 +165,15 @@ const generateQuestionsFromMaterial = async (
       throw new ApiError(400, 'Material must be linked to a topic for question import');
     }
 
-    const questionsToCreate = parsed.questions.map((q) => ({
+    const existingQuestionTextSet = await getExistingQuestionTextSet({
+      universityId: material.universityId,
+      courseId: material.courseId,
+      topicId: material.topicId,
+    });
+
+    const uniqueQuestions = filterUniqueQuestions(parsed.questions, existingQuestionTextSet);
+
+    const questionsToCreate = uniqueQuestions.map((q) => ({
       universityId: material.universityId,
       courseId: material.courseId,
       topicId: material.topicId,
@@ -116,7 +189,7 @@ const generateQuestionsFromMaterial = async (
       status: 'pending',
     }));
 
-    const created = await Question.insertMany(questionsToCreate);
+    const created = questionsToCreate.length ? await Question.insertMany(questionsToCreate) : [];
 
     await SourceMaterial.findByIdAndUpdate(materialId, {
       processingStatus: 'completed',
@@ -138,16 +211,18 @@ const generateQuestionsFromMaterial = async (
 
   const cacheHours = env.AI_CACHE_HOURS || 24;
   const cacheThreshold = new Date(Date.now() - cacheHours * 60 * 60 * 1000);
-  const cachedLog = await AIGenerationLog.findOne({
+  const cachedLog = !fresh ? await AIGenerationLog.findOne({
     materialId,
     difficulty,
     status: 'success',
     createdAt: { $gte: cacheThreshold },
-  }).sort({ createdAt: -1 });
+  }).sort({ createdAt: -1 }) : null;
 
   if (cachedLog?.generatedQuestionIds?.length) {
     const cachedQuestions = await Question.find({
       _id: { $in: cachedLog.generatedQuestionIds },
+      status: 'pending',
+      isActive: true,
     });
     if (cachedQuestions.length) {
       await SourceMaterial.findByIdAndUpdate(materialId, {
@@ -188,7 +263,7 @@ const generateQuestionsFromMaterial = async (
   log = await log.save();
 
   try {
-    const course = await require('../models/Course').findById(material.courseId);
+    const course = await Course.findById(material.courseId);
     if (!course) {
       throw new ApiError(404, 'Course not found for material');
     }
@@ -197,20 +272,48 @@ const generateQuestionsFromMaterial = async (
       throw new ApiError(400, 'Material must be linked to a topic for AI generation');
     }
 
-    const topic = await require('../models/Topic').findById(material.topicId);
+    const topic = await Topic.findById(material.topicId);
     if (!topic) {
       throw new ApiError(404, 'Topic not found for material');
     }
 
     const topicName = topic.name;
-    const generatedQuestions = await generateQuestions(
-      material.content,
-      course.code,
-      topicName,
-      difficulty
-    );
+    const existingQuestionTextSet = await getExistingQuestionTextSet({
+      universityId: material.universityId,
+      courseId: material.courseId,
+      topicId: material.topicId,
+    });
 
-    const questionsToCreate = generatedQuestions.map((q) => ({
+    const deduplicatedQuestions = [];
+    for (let attempt = 0; attempt < MAX_AI_ATTEMPTS && deduplicatedQuestions.length < TARGET_QUESTION_COUNT; attempt += 1) {
+      const generatedQuestions = await generateQuestions(
+        material.content,
+        course.code,
+        topicName,
+        difficulty,
+        {
+          questionCount: TARGET_QUESTION_COUNT,
+          excludedQuestionTexts: Array.from(existingQuestionTextSet),
+        }
+      );
+
+      const uniqueBatch = filterUniqueQuestions(generatedQuestions, existingQuestionTextSet);
+      if (!uniqueBatch.length) {
+        continue;
+      }
+
+      deduplicatedQuestions.push(...uniqueBatch);
+    }
+
+    const selectedQuestions = deduplicatedQuestions.slice(0, TARGET_QUESTION_COUNT);
+    if (!selectedQuestions.length) {
+      throw new ApiError(
+        409,
+        'Unable to generate new unique questions for this material. Try a different material or topic.'
+      );
+    }
+
+    const questionsToCreate = selectedQuestions.map((q) => ({
       universityId: material.universityId,
       courseId: material.courseId,
       topicId: material.topicId,
@@ -301,7 +404,7 @@ const importQuestionsFromMaterial = async (materialId, adminId, questions) => {
     throw new ApiError(400, 'Material must be linked to a topic for question import');
   }
 
-  const course = await require('../models/Course').findById(material.courseId);
+  const course = await Course.findById(material.courseId);
   if (!course) {
     throw new ApiError(404, 'Course not found for material');
   }

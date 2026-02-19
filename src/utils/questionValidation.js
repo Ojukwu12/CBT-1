@@ -1,9 +1,9 @@
 const VALID_DIFFICULTIES = new Set(['easy', 'medium', 'hard']);
 const VALID_OPTIONS = new Set(['A', 'B', 'C', 'D']);
 
-const validateQuestions = (questions) => {
-  if (!Array.isArray(questions) || questions.length !== 10) {
-    throw new Error('AI must return exactly 10 questions');
+const validateQuestions = (questions, expectedCount = 20) => {
+  if (!Array.isArray(questions) || questions.length !== expectedCount) {
+    throw new Error(`AI must return exactly ${expectedCount} questions`);
   }
 
   questions.forEach((q, index) => {

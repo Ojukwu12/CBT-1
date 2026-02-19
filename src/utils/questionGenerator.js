@@ -9,7 +9,13 @@ const PROVIDERS = {
 
 const normalizeProvider = (provider) => (provider || '').trim().toLowerCase();
 
-const generateQuestions = async (materialContent, courseCode, topicName, difficulty = 'mixed') => {
+const generateQuestions = async (
+  materialContent,
+  courseCode,
+  topicName,
+  difficulty = 'mixed',
+  options = {}
+) => {
   const providers = [env.AI_PROVIDER, env.AI_FALLBACK_PROVIDER]
     .map(normalizeProvider)
     .filter(Boolean);
@@ -36,7 +42,7 @@ const generateQuestions = async (materialContent, courseCode, topicName, difficu
     }
 
     try {
-      return await handler(materialContent, courseCode, topicName, difficulty);
+      return await handler(materialContent, courseCode, topicName, difficulty, options);
     } catch (err) {
       lastError = err;
     }
