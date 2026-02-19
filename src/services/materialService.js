@@ -1,4 +1,4 @@
-const Material = require('../models/Material');
+const SourceMaterial = require('../models/SourceMaterial');
 const Question = require('../models/Question');
 const AIGenerationLog = require('../models/AIGenerationLog');
 const { generateQuestions } = require('../utils/questionGenerator');
@@ -9,7 +9,7 @@ const ApiError = require('../utils/ApiError');
 
 const uploadMaterial = async (materialData) => {
   const { fileBuffer, mimeType, ...payload } = materialData;
-  const material = new Material(payload);
+  const material = new SourceMaterial(payload);
 
   if (!material.content) {
     const extracted = await extractTextFromMaterial({
@@ -26,11 +26,11 @@ const uploadMaterial = async (materialData) => {
 };
 
 const getMaterialById = async (id) => {
-  const material = await Material.findById(id)
+  const material = await SourceMaterial.findById(id)
     .populate('uploadedBy');
 
   if (!material) {
-    throw new ApiError(404, 'Material not found');
+    throw new ApiError(404, 'Source material not found');
   }
 
   return material;
@@ -38,7 +38,7 @@ const getMaterialById = async (id) => {
 
 const getMaterialsByCourse = async (courseId, filters = {}) => {
   const query = { courseId, ...filters };
-  return await Material.find(query)
+  return await SourceMaterial.find(query)
     .select('-content')
     .limit(100);
 };
@@ -49,11 +49,17 @@ const generateQuestionsFromMaterial = async (
   difficulty = 'mixed'
 ) => {
   const startTime = Date.now();
-  
-  const material = await Material.findById(materialId);
+
+  const material = await SourceMaterial.findById(materialId);
   if (!material) {
-    throw new ApiError(404, 'Material not found');
+    throw new ApiError(404, 'Source material not found');
   }
+
+  await SourceMaterial.findByIdAndUpdate(materialId, {
+    processingStatus: 'processing',
+    processingStartedAt: new Date(),
+    processingError: null,
+  });
 
   if (!material.content) {
     const extracted = await extractTextFromMaterial({
@@ -64,12 +70,19 @@ const generateQuestionsFromMaterial = async (
       throw new ApiError(400, 'Material has no content to generate questions from');
     }
     material.content = extracted;
+    material.extractionMethod = 'ocr';
     await material.save();
   }
 
   const parsed = detectQuestionBank(material.content);
   if (parsed.isQuestionBank) {
     if (parsed.missingAnswers > 0) {
+      await SourceMaterial.findByIdAndUpdate(materialId, {
+        processingStatus: 'completed',
+        processingCompletedAt: new Date(),
+        extractionMethod: 'ocr',
+      });
+
       return {
         mode: 'question_bank',
         missingAnswers: parsed.missingAnswers,
@@ -105,9 +118,12 @@ const generateQuestionsFromMaterial = async (
 
     const created = await Question.insertMany(questionsToCreate);
 
-    await Material.findByIdAndUpdate(materialId, {
-      status: 'processed',
+    await SourceMaterial.findByIdAndUpdate(materialId, {
+      processingStatus: 'completed',
+      processingCompletedAt: new Date(),
+      extractionMethod: 'ocr',
       questionsGenerated: created.length,
+      questionsIds: created.map((q) => q._id),
     });
 
     return {
@@ -134,6 +150,14 @@ const generateQuestionsFromMaterial = async (
       _id: { $in: cachedLog.generatedQuestionIds },
     });
     if (cachedQuestions.length) {
+      await SourceMaterial.findByIdAndUpdate(materialId, {
+        processingStatus: 'completed',
+        processingCompletedAt: new Date(),
+        extractionMethod: 'ai_generated',
+        questionsGenerated: cachedQuestions.length,
+        questionsIds: cachedQuestions.map((q) => q._id),
+      });
+
       return {
         mode: 'ai',
         log: cachedLog,
@@ -217,9 +241,12 @@ const generateQuestionsFromMaterial = async (
       { new: true }
     );
 
-    await Material.findByIdAndUpdate(materialId, {
-      status: 'processed',
+    await SourceMaterial.findByIdAndUpdate(materialId, {
+      processingStatus: 'completed',
+      processingCompletedAt: new Date(),
+      extractionMethod: 'ai_generated',
       questionsGenerated: created.length,
+      questionsIds: created.map((q) => q._id),
     });
 
     return {
@@ -240,8 +267,10 @@ const generateQuestionsFromMaterial = async (
       { new: true }
     );
 
-    await Material.findByIdAndUpdate(materialId, {
-      status: 'failed',
+    await SourceMaterial.findByIdAndUpdate(materialId, {
+      processingStatus: 'failed',
+      processingCompletedAt: new Date(),
+      processingError: error.message,
     });
 
     throw new ApiError(500, `Question generation failed: ${error.message}`);
@@ -249,9 +278,9 @@ const generateQuestionsFromMaterial = async (
 };
 
 const importQuestionsFromMaterial = async (materialId, adminId, questions) => {
-  const material = await Material.findById(materialId);
+  const material = await SourceMaterial.findById(materialId);
   if (!material) {
-    throw new ApiError(404, 'Material not found');
+    throw new ApiError(404, 'Source material not found');
   }
 
   if (!material.topicId) {
@@ -281,9 +310,11 @@ const importQuestionsFromMaterial = async (materialId, adminId, questions) => {
 
   const created = await Question.insertMany(toCreate);
 
-  await Material.findByIdAndUpdate(materialId, {
-    status: 'processed',
+  await SourceMaterial.findByIdAndUpdate(materialId, {
+    processingStatus: 'completed',
+    processingCompletedAt: new Date(),
     questionsGenerated: created.length,
+    questionsIds: created.map((q) => q._id),
   });
 
   return { questions: created };

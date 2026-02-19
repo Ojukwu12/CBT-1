@@ -9,6 +9,24 @@ const storageService = require('../services/storageService');
 const mime = require('mime-types');
 const ApiError = require('../utils/ApiError');
 
+const getGenerationMode = (value) => {
+  if (value === 'ai_generated' || value === 'ai') {
+    return 'ai';
+  }
+  if (value === 'ocr' || value === 'question_bank') {
+    return 'ocr';
+  }
+  return null;
+};
+
+const serializeSourceMaterial = (material) => {
+  const materialObject = typeof material.toObject === 'function' ? material.toObject() : material;
+  return {
+    ...materialObject,
+    generationMode: getGenerationMode(materialObject.extractionMethod),
+  };
+};
+
 const uploadSourceMaterial = [
   validate(uploadMaterialSchema),
   asyncHandler(async (req, res) => {
@@ -70,7 +88,7 @@ const uploadSourceMaterial = [
 ];
 
 const getSourceMaterial = asyncHandler(async (req, res) => {
-  const { materialId } = req.params;
+  const { id: materialId } = req.params;
   
   const material = await SourceMaterial.findById(materialId);
   if (!material) {
@@ -79,13 +97,13 @@ const getSourceMaterial = asyncHandler(async (req, res) => {
 
   res.status(200).json({
     success: true,
-    data: material,
+    data: serializeSourceMaterial(material),
   });
 });
 
 const listSourceMaterialsByCourse = asyncHandler(async (req, res) => {
   const { courseId } = req.params;
-  const { status = 'completed', page = 1, limit = 20 } = req.query;
+  const { status, page = 1, limit = 20 } = req.query;
 
   await courseService.getCourseById(courseId);
 
@@ -98,23 +116,25 @@ const listSourceMaterialsByCourse = asyncHandler(async (req, res) => {
     filters.processingStatus = status;
   }
 
-  const skip = (page - 1) * limit;
+  const pageNumber = parseInt(page, 10);
+  const limitNumber = parseInt(limit, 10);
+  const skip = (pageNumber - 1) * limitNumber;
   const [materials, total] = await Promise.all([
     SourceMaterial.find(filters)
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(parseInt(limit)),
+      .limit(limitNumber),
     SourceMaterial.countDocuments(filters),
   ]);
 
   res.status(200).json({
     success: true,
-    data: materials,
+    data: materials.map(serializeSourceMaterial),
     pagination: {
       total,
-      page: parseInt(page),
-      limit: parseInt(limit),
-      pages: Math.ceil(total / limit) || 1,
+      page: pageNumber,
+      limit: limitNumber,
+      pages: Math.ceil(total / limitNumber) || 1,
     }
   });
 });
@@ -152,6 +172,7 @@ const generateQuestionsFromMaterial = [
         success: false,
         data: {
           materialId,
+          generationMode: getGenerationMode(result.mode),
           missingAnswers: result.missingAnswers,
           extractedQuestions: result.extractedQuestions,
         },
@@ -164,6 +185,7 @@ const generateQuestionsFromMaterial = [
       data: {
         log: result.log || null,
         mode: result.mode,
+        generationMode: getGenerationMode(result.mode),
         questionsCount: result.questions.length,
         questionIds: result.questions.map((q) => q._id),
       },
