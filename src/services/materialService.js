@@ -256,12 +256,26 @@ const generateQuestionsFromMaterial = async (
     };
   } catch (error) {
     const executionTime = Date.now() - startTime;
+    const upstreamStatus = error?.response?.status;
+    const statusCode =
+      error?.statusCode ||
+      error?.status ||
+      (Number.isInteger(upstreamStatus) ? upstreamStatus : null) ||
+      500;
+    const upstreamMessage =
+      error?.response?.data?.error?.message ||
+      error?.response?.data?.message ||
+      error.message;
+    const finalMessage =
+      statusCode === 429
+        ? `Question generation rate-limited: ${upstreamMessage}`
+        : `Question generation failed: ${upstreamMessage}`;
 
     log = await AIGenerationLog.findByIdAndUpdate(
       log._id,
       {
         status: 'failed',
-        errorMessage: error.message,
+        errorMessage: finalMessage,
         executionTime,
       },
       { new: true }
@@ -270,10 +284,10 @@ const generateQuestionsFromMaterial = async (
     await SourceMaterial.findByIdAndUpdate(materialId, {
       processingStatus: 'failed',
       processingCompletedAt: new Date(),
-      processingError: error.message,
+      processingError: finalMessage,
     });
 
-    throw new ApiError(500, `Question generation failed: ${error.message}`);
+    throw new ApiError(statusCode, finalMessage);
   }
 };
 
