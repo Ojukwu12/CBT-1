@@ -673,6 +673,8 @@ class ExamService {
       dailyLimit: status.dailyLimit,
       usedToday: status.usedToday,
       remainingToday: status.remainingToday,
+      used: status.usedToday,
+      remaining: status.remainingToday,
       resetsAt: status.resetsAt,
       scope: status.scope,
     };

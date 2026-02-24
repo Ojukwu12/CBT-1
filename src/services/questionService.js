@@ -146,6 +146,28 @@ const deleteQuestion = async (questionId) => {
   return question;
 };
 
+const updateQuestion = async (questionId, updateData) => {
+  const question = await Question.findOneAndUpdate(
+    {
+      _id: questionId,
+      status: { $in: ['pending', 'approved'] },
+    },
+    {
+      $set: updateData,
+    },
+    {
+      new: true,
+      runValidators: true,
+    }
+  );
+
+  if (!question) {
+    throw new ApiError(404, 'Question not found or cannot be edited in its current status');
+  }
+
+  return question;
+};
+
 const getPendingQuestions = async (universityId, filters = {}) => {
   const query = { universityId, status: 'pending', ...filters };
   return await Question.find(query)
@@ -181,6 +203,7 @@ module.exports = {
   approveQuestion,
   rejectQuestion,
   deleteQuestion,
+  updateQuestion,
   getPendingQuestions,
   getQuestionStats,
 };

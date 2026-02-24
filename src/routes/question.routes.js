@@ -24,6 +24,7 @@ router.get('/random/:topicId', questionController.getRandomQuestions);
 router.get('/:topicId', questionController.getQuestionsByTopic);
 router.post('/approve/:questionId', isAdmin, questionController.approveQuestion);
 router.post('/reject/:questionId', isAdmin, questionController.rejectQuestion);
+router.put('/:questionId', isAdmin, validate(questionIdSchema, 'params'), questionController.updateQuestion);
 router.delete('/:questionId', isAdmin, validate(questionIdSchema, 'params'), questionController.deleteQuestion);
 
 module.exports = router;

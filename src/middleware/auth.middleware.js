@@ -25,7 +25,16 @@ const verifyToken = (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, env.JWT_SECRET);
-    req.user = decoded;
+    const normalizedUserId = decoded?.id || decoded?._id || decoded?.userId;
+
+    if (!normalizedUserId) {
+      return next(new ApiError(401, 'Invalid token payload'));
+    }
+
+    req.user = {
+      ...decoded,
+      id: normalizedUserId.toString(),
+    };
     next();
   } catch (err) {
     if (err instanceof jwt.TokenExpiredError) {

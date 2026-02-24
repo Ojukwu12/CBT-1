@@ -2,7 +2,7 @@ const questionService = require('../services/questionService');
 const topicService = require('../services/topicService');
 const asyncHandler = require('../utils/asyncHandler');
 const validate = require('../middleware/validate.middleware');
-const { approveRejectSchema, createQuestionSchema, listQuestionsSchema } = require('../validators/question.validator');
+const { approveRejectSchema, createQuestionSchema, listQuestionsSchema, updateQuestionSchema } = require('../validators/question.validator');
 const emailService = require('../services/emailService');
 const User = require('../models/User');
 const Logger = require('../utils/logger');
@@ -211,6 +211,33 @@ const deleteQuestion = asyncHandler(async (req, res) => {
   });
 });
 
+const updateQuestion = [
+  validate(updateQuestionSchema),
+  asyncHandler(async (req, res) => {
+    const { questionId } = req.params;
+    const updateData = { ...req.body };
+
+    if (updateData.courseId) {
+      const course = await Course.findById(updateData.courseId);
+      if (!course) {
+        throw new ApiError(404, 'Course not found');
+      }
+
+      updateData.universityId = course.universityId;
+      updateData.departmentId = course.departmentId;
+      updateData.level = course.level;
+    }
+
+    const question = await questionService.updateQuestion(questionId, updateData);
+
+    res.status(200).json({
+      success: true,
+      data: question,
+      message: 'Question updated successfully',
+    });
+  })
+];
+
 const getQuestionStats = asyncHandler(async (req, res) => {
   const { topicId } = req.params;
 
@@ -231,6 +258,7 @@ module.exports = {
   getPendingQuestions,
   approveQuestion,
   rejectQuestion,
+  updateQuestion,
   deleteQuestion,
   getQuestionStats,
 };

@@ -42,9 +42,30 @@ const questionIdSchema = Joi.object({
   questionId: Joi.string().regex(/^[0-9a-fA-F]{24}$/).required(),
 });
 
+const updateQuestionSchema = Joi.object({
+  text: Joi.string().min(5).max(1000).optional(),
+  options: Joi.object({
+    A: Joi.string().required(),
+    B: Joi.string().required(),
+    C: Joi.string().required(),
+    D: Joi.string().required(),
+  }).optional(),
+  correctAnswer: Joi.string().valid('A', 'B', 'C', 'D').optional(),
+  difficulty: Joi.string().valid('easy', 'medium', 'hard').optional(),
+  accessLevel: Joi.string().valid('free', 'basic', 'premium').optional(),
+  topicId: Joi.string().regex(/^[0-9a-fA-F]{24}$/).optional(),
+  courseId: Joi.string().regex(/^[0-9a-fA-F]{24}$/).optional(),
+  isActive: Joi.boolean().optional(),
+})
+  .min(1)
+  .messages({
+    'object.min': 'Provide at least one field to update',
+  });
+
 module.exports = {
   createQuestionSchema,
   approveRejectSchema,
   listQuestionsSchema,
   questionIdSchema,
+  updateQuestionSchema,
 };
