@@ -11,6 +11,83 @@ const { sanitizeQuestionText } = require('../utils/questionText');
 const { env } = require('../config/env');
 
 class ExamService {
+  static getDailyCourseQuestionLimit(user) {
+    if (!user || user.role === 'admin') {
+      return null;
+    }
+
+    return user.plan === 'free' ? 40 : 70;
+  }
+
+  static getCurrentDayBounds() {
+    const dayStart = new Date();
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(dayStart);
+    dayEnd.setDate(dayEnd.getDate() + 1);
+    return { dayStart, dayEnd };
+  }
+
+  static async getCourseDailyUsage(userId, courseId, { dayStart, dayEnd } = {}) {
+    const bounds = dayStart && dayEnd
+      ? { dayStart, dayEnd }
+      : ExamService.getCurrentDayBounds();
+
+    const usageStats = await ExamSession.aggregate([
+      {
+        $match: {
+          userId: new mongoose.Types.ObjectId(userId),
+          courseId: new mongoose.Types.ObjectId(courseId),
+          startedAt: { $gte: bounds.dayStart, $lt: bounds.dayEnd }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: '$totalQuestions' }
+        }
+      }
+    ]);
+
+    return usageStats[0]?.total || 0;
+  }
+
+  static async getDailyCourseLimitStatus(userId, courseId, user = null) {
+    const currentUser = user || await User.findById(userId);
+    if (!currentUser) throw new ApiError(404, 'User not found');
+
+    if (currentUser.plan !== 'free' && currentUser.planExpiresAt && new Date() > currentUser.planExpiresAt) {
+      currentUser.plan = 'free';
+      currentUser.planExpiresAt = null;
+      await currentUser.save();
+    }
+
+    const dailyLimit = ExamService.getDailyCourseQuestionLimit(currentUser);
+    const { dayStart, dayEnd } = ExamService.getCurrentDayBounds();
+
+    if (dailyLimit === null) {
+      return {
+        userTier: currentUser.plan,
+        dailyLimit: null,
+        usedToday: 0,
+        remainingToday: null,
+        resetsAt: dayEnd,
+        scope: 'per_course',
+      };
+    }
+
+    const usedToday = await ExamService.getCourseDailyUsage(userId, courseId, { dayStart, dayEnd });
+    const remainingToday = Math.max(dailyLimit - usedToday, 0);
+
+    return {
+      userTier: currentUser.plan,
+      dailyLimit,
+      usedToday,
+      remainingToday,
+      resetsAt: dayEnd,
+      scope: 'per_course',
+    };
+  }
+
   static getResultDelayMinutes() {
     const delay = parseInt(env.EXAM_RESULT_DELAY_MINUTES || 0, 10);
     return Number.isNaN(delay) ? 0 : Math.max(0, delay);
@@ -77,18 +154,7 @@ class ExamService {
       await user.save();
     }
 
-    // Apply tier-based question count restrictions
-    let finalTotalQuestions = totalQuestions;
-    if (user.role === 'admin') {
-      // Admins can select any number (same as premium)
-      finalTotalQuestions = Math.min(Math.max(totalQuestions, 1), 100);
-    } else if (user.plan === 'free') {
-      // Free tier: fixed 10 questions
-      finalTotalQuestions = 10;
-    } else {
-      // Paid tiers (basic, premium): allow 1-100 questions
-      finalTotalQuestions = Math.min(Math.max(totalQuestions, 1), 100);
-    }
+    const requestedQuestions = Math.min(Math.max(totalQuestions, 1), 100);
 
     // Verify the course exists and belongs to the selected department/university
     const course = await Course.findById(courseId);
@@ -102,6 +168,26 @@ class ExamService {
     
     if (course.departmentId.toString() !== departmentId) {
       throw new ApiError(400, 'Course does not belong to the selected department');
+    }
+
+    const dailyLimitStatus = await ExamService.getDailyCourseLimitStatus(userId, courseId, user);
+    const dailyLimit = dailyLimitStatus.dailyLimit;
+    const questionsUsedTodayForCourse = dailyLimitStatus.usedToday;
+    let remainingQuestionsForCourseToday = dailyLimitStatus.remainingToday;
+
+    if (dailyLimit !== null && remainingQuestionsForCourseToday <= 0) {
+      throw new ApiError(429, `Daily question limit reached for this course (${dailyLimit}/day). Your limit resets at the end of today.`, {
+        dailyLimit,
+        usedToday: questionsUsedTodayForCourse,
+        remainingToday: 0,
+        resetsAt: dailyLimitStatus.resetsAt,
+        scope: 'per_course'
+      });
+    }
+
+    let finalTotalQuestions = requestedQuestions;
+    if (dailyLimit !== null) {
+      finalTotalQuestions = Math.min(requestedQuestions, remainingQuestionsForCourseToday);
     }
 
     // Update user's last selected preferences for convenience
@@ -165,7 +251,7 @@ class ExamService {
         timeSpentSeconds: 0,
         attemptedAt: null
       })),
-      tierRestriction: user.plan === 'free' ? 'free_tier_10_questions_fixed' : null
+      tierRestriction: dailyLimit !== null ? `daily_per_course_${dailyLimit}_questions` : null
     });
 
     await examSession.save();
@@ -177,9 +263,16 @@ class ExamService {
       durationMinutes: examSession.durationMinutes,
       startedAt: examSession.startedAt,
       userTier: user.plan,
-      tierInfo: user.plan === 'free' 
-        ? { type: 'free', maxQuestions: 10, note: 'Free tier limited to 10 questions' }
-        : { type: user.plan, maxQuestions: 100, note: `${user.plan} tier can select 1-100 questions` },
+      tierInfo: dailyLimit === null
+        ? { type: user.plan, maxQuestions: 100, note: `${user.plan} tier can select 1-100 questions` }
+        : {
+            type: user.plan,
+            dailyCourseLimit: dailyLimit,
+            usedTodayForCourse: questionsUsedTodayForCourse,
+            remainingTodayForCourse: Math.max(dailyLimit - (questionsUsedTodayForCourse + examSession.totalQuestions), 0),
+            resetsAt: dailyLimitStatus.resetsAt,
+            note: `Daily limit per course is ${dailyLimit} questions`
+          },
       questions: questions.map(q => ({
         questionId: q._id,
         text: sanitizeQuestionText(q.text),
@@ -564,6 +657,25 @@ class ExamService {
 
     examSession.status = 'abandoned';
     await examSession.save();
+  }
+
+  static async getDailyLimitByCourse(userId, courseId) {
+    const course = await Course.findById(courseId);
+    if (!course) {
+      throw new ApiError(404, 'Course not found');
+    }
+
+    const status = await ExamService.getDailyCourseLimitStatus(userId, courseId);
+
+    return {
+      courseId,
+      userTier: status.userTier,
+      dailyLimit: status.dailyLimit,
+      usedToday: status.usedToday,
+      remainingToday: status.remainingToday,
+      resetsAt: status.resetsAt,
+      scope: status.scope,
+    };
   }
 }
 

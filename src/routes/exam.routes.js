@@ -6,13 +6,20 @@ const {
   examStartSchema,
   submitAnswerSchema,
   examParamsSchema,
-  historyQuerySchema
+  historyQuerySchema,
+  dailyLimitQuerySchema
 } = require('../validators/exam.validator');
 
 const router = express.Router();
 
 // All exam routes require authentication
 router.use(verifyToken);
+
+/**
+ * GET /api/exams/daily-limit?courseId=...
+ * Get per-course daily question quota status for current user
+ */
+router.get('/daily-limit', validate(dailyLimitQuerySchema, 'query'), examController.getDailyLimitByCourse);
 
 /**
  * POST /api/exams/start

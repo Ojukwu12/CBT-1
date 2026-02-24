@@ -122,6 +122,20 @@ class ExamController {
   });
 
   /**
+   * Get daily question limit status for a course
+   * GET /api/exams/daily-limit?courseId=...
+   */
+  static getDailyLimitByCourse = asyncHandler(async (req, res) => {
+    const { courseId } = req.query;
+
+    const result = await ExamService.getDailyLimitByCourse(req.user.id, courseId);
+
+    res.status(200).json(
+      new ApiResponse(200, result, 'Daily question limit status retrieved')
+    );
+  });
+
+  /**
    * Abandon an exam
    * POST /api/exams/:examSessionId/abandon
    */

@@ -109,9 +109,20 @@ const historyQuerySchema = Joi.object({
     })
 });
 
+const dailyLimitQuerySchema = Joi.object({
+  courseId: Joi.string()
+    .regex(/^[0-9a-fA-F]{24}$/)
+    .required()
+    .messages({
+      'string.pattern.base': 'Invalid course ID format',
+      'any.required': 'Course ID is required'
+    })
+});
+
 module.exports = {
   examStartSchema,
   submitAnswerSchema,
   examParamsSchema,
-  historyQuerySchema
+  historyQuerySchema,
+  dailyLimitQuerySchema
 };

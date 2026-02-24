@@ -3,6 +3,7 @@ const path = require('path');
 const axios = require('axios');
 const pdfParse = require('pdf-parse');
 const Tesseract = require('tesseract.js');
+const mammoth = require('mammoth');
 const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { env } = require('../config/env');
 
@@ -102,6 +103,11 @@ const extractFromText = async (buffer) => {
   return normalizeText(buffer.toString('utf8'));
 };
 
+const extractFromDocx = async (buffer) => {
+  const result = await mammoth.extractRawText({ buffer });
+  return normalizeText(result?.value || '');
+};
+
 const extractTextFromBuffer = async (buffer, fileType) => {
   if (!buffer) {
     return '';
@@ -114,6 +120,9 @@ const extractTextFromBuffer = async (buffer, fileType) => {
       return extractFromImage(buffer);
     case 'text':
       return extractFromText(buffer);
+    case 'document':
+    case 'docx':
+      return extractFromDocx(buffer);
     default:
       throw new Error(`Unsupported file type: ${fileType}`);
   }

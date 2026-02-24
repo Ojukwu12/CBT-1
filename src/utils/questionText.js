@@ -1,4 +1,5 @@
-const ANSWER_LINE_REGEX = /^\s*(?:answer|ans|correct(?:\s+answer)?|correct\s+option)\s*[:\-]?\s*[A-D]\b.*$/i;
+const ANSWER_MARKER_REGEX = '(?:right(?:\\s+answer|\\s+option)?|answer|ans|correct(?:\\s+answer)?|correct\\s+option)';
+const ANSWER_LINE_REGEX = new RegExp(`^\\s*${ANSWER_MARKER_REGEX}\\s*[:\\-]?\\s*[A-D]\\b.*$`, 'i');
 const OPTION_LINE_REGEX = /^\s*[A-D]\s*[\).:-]\s+.+$/i;
 
 const sanitizeQuestionText = (value = '') => {
@@ -14,7 +15,7 @@ const sanitizeQuestionText = (value = '') => {
   const lineCombined = cleanedLines.join(' ').replace(/\s+/g, ' ').trim();
 
   return lineCombined
-    .replace(/\s*(?:answer|ans|correct(?:\s+answer)?|correct\s+option)\s*[:\-]?\s*[A-D]\b.*$/i, '')
+    .replace(new RegExp(`\\s*${ANSWER_MARKER_REGEX}\\s*[:\\-]?\\s*[A-D]\\b.*$`, 'i'), '')
     .replace(/\s+/g, ' ')
     .trim();
 };

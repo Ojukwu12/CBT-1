@@ -32,7 +32,7 @@ const studyMaterialSchema = new mongoose.Schema(
     description: String,
     fileType: {
       type: String,
-      enum: ['pdf', 'image', 'text', 'video', 'document'],
+      enum: ['pdf', 'image', 'text', 'video', 'document', 'docx'],
       required: true,
     },
     fileUrl: {

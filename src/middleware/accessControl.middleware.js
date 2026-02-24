@@ -95,9 +95,9 @@ const checkDailyLimit = async (req, res, next) => {
   // This is prepared for Phase 1 when we have user attempt logging
   // For now, we just structure it
   const limits = {
-    free: 10,
-    basic: 50,
-    premium: null, // unlimited
+    free: 40,
+    basic: 70,
+    premium: 70,
   };
 
   const userLimit = limits[user.plan];

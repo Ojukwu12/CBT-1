@@ -2,7 +2,7 @@ const Joi = require('joi');
 
 const uploadMaterialSchema = Joi.object({
   title: Joi.string().min(2).max(100).required(),
-  fileType: Joi.string().valid('pdf','image','text').required(),
+  fileType: Joi.string().valid('pdf','image','text','document','docx').required(),
   fileUrl: Joi.string().uri().optional(),
   fileSize: Joi.number().min(1).max(20000000).optional(),
   content: Joi.string().allow('').optional(),

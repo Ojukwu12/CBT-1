@@ -3,7 +3,7 @@ const { sanitizeQuestionText } = require('./questionText');
 
 const QUESTION_START_REGEX = /^\s*(?:Q\s*\d+|Question\s*\d+|\d+)\s*[\).:-]\s*(.+)$/i;
 const OPTION_REGEX = /^\s*([A-D])\s*[\).:-]\s*(.+)$/i;
-const ANSWER_REGEX = /\b(?:answer|ans|correct)\b\s*[:\-]?\s*([A-D])\b/i;
+const ANSWER_REGEX = /\b(?:right(?:\s+answer|\s+option)?|answer|ans|correct(?:\s+answer)?|correct\s+option|correct)\b\s*[:\-]?\s*([A-D])\b/i;
 
 const splitIntoBlocks = (text) => {
   const lines = normalizeText(text).split(/\n+/);

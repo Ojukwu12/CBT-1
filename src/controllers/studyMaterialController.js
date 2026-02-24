@@ -4,11 +4,22 @@ const asyncHandler = require('../utils/asyncHandler');
 const validate = require('../middleware/validate.middleware');
 const { uploadStudyMaterialSchema, listStudyMaterialsSchema } = require('../validators/studyMaterial.validator');
 const storageService = require('../services/storageService');
-const mime = require('mime-types');
+const { inferFileTypeFromUpload } = require('../utils/fileType');
 const ApiError = require('../utils/ApiError');
 const UserAnalytics = require('../models/UserAnalytics');
 
+const inferUploadStudyMaterialFileType = (req, res, next) => {
+  if (!req.body.fileType && req.file) {
+    const inferredFileType = inferFileTypeFromUpload(req.file);
+    if (inferredFileType) {
+      req.body.fileType = inferredFileType;
+    }
+  }
+  next();
+};
+
 const uploadStudyMaterial = [
+  inferUploadStudyMaterialFileType,
   validate(uploadStudyMaterialSchema),
   asyncHandler(async (req, res) => {
     const { courseId } = req.params;

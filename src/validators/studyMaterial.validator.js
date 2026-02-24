@@ -3,7 +3,7 @@ const Joi = require('joi');
 const uploadStudyMaterialSchema = Joi.object({
   title: Joi.string().min(5).max(200).required(),
   description: Joi.string().max(1000).optional(),
-  fileType: Joi.string().valid('pdf', 'image', 'text', 'video', 'document').required(),
+  fileType: Joi.string().valid('pdf', 'image', 'text', 'video', 'document', 'docx').required(),
   fileUrl: Joi.string().uri().optional(),
   fileSize: Joi.number().optional(),
   topicId: Joi.string().regex(/^[0-9a-fA-F]{24}$/).optional(),

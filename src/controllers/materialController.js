@@ -7,6 +7,7 @@ const validate = require('../middleware/validate.middleware');
 const { uploadMaterialSchema, generateQuestionsSchema, importQuestionsSchema } = require('../validators/material.validator');
 const storageService = require('../services/storageService');
 const { extractTextFromMaterial } = require('../utils/fileExtraction');
+const { inferFileTypeFromUpload } = require('../utils/fileType');
 const ApiError = require('../utils/ApiError');
 
 const getGenerationMode = (value) => {
@@ -27,7 +28,18 @@ const serializeSourceMaterial = (material) => {
   };
 };
 
+const inferUploadMaterialFileType = (req, res, next) => {
+  if (!req.body.fileType && req.file) {
+    const inferredFileType = inferFileTypeFromUpload(req.file);
+    if (inferredFileType) {
+      req.body.fileType = inferredFileType;
+    }
+  }
+  next();
+};
+
 const uploadSourceMaterial = [
+  inferUploadMaterialFileType,
   validate(uploadMaterialSchema),
   asyncHandler(async (req, res) => {
     const { courseId } = req.params;

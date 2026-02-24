@@ -126,9 +126,9 @@ const checkDailyQuestionLimit = async (userId) => {
   const user = await getUserById(userId);
 
   const dailyLimits = {
-    free: 10,
-    basic: 50,
-    premium: null, // unlimited
+    free: 40,
+    basic: 70,
+    premium: 70,
   };
 
   const limit = dailyLimits[user.plan];
