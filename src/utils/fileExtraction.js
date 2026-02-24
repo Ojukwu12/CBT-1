@@ -136,4 +136,5 @@ const extractTextFromMaterial = async ({ fileBuffer, fileUrl, fileType }) => {
 module.exports = {
   extractTextFromMaterial,
   normalizeText,
+  downloadFile,
 };

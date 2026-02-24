@@ -446,6 +446,43 @@ const importQuestionsFromMaterial = async (materialId, adminId, questions) => {
     throw new ApiError(404, 'Source material not found');
   }
 
+  let questionsToImport = Array.isArray(questions) ? questions : [];
+
+  if (!questionsToImport.length) {
+    let content = material.content;
+
+    if (!content) {
+      content = await extractTextFromMaterial({
+        fileUrl: material.fileUrl,
+        fileType: material.fileType,
+      });
+    }
+
+    if (!content) {
+      throw new ApiError(400, 'Material has no extractable content for import');
+    }
+
+    const parsed = detectQuestionBank(content);
+    if (!parsed.isQuestionBank) {
+      throw new ApiError(400, 'No valid question bank detected in material content');
+    }
+
+    if (parsed.missingAnswers > 0) {
+      throw new ApiError(400, 'Some detected questions are missing answers. Provide answers before importing.', {
+        missingAnswers: parsed.missingAnswers,
+        extractedQuestions: parsed.questions,
+      });
+    }
+
+    questionsToImport = parsed.questions;
+
+    if (material.content !== content) {
+      material.content = content;
+      material.extractionMethod = 'ocr';
+      await material.save();
+    }
+  }
+
   if (!material.topicId) {
     throw new ApiError(400, 'Material must be linked to a topic for question import');
   }
@@ -455,7 +492,7 @@ const importQuestionsFromMaterial = async (materialId, adminId, questions) => {
     throw new ApiError(404, 'Course not found for material');
   }
 
-  const toCreate = questions.map((q) => ({
+  const toCreate = questionsToImport.map((q) => ({
     universityId: material.universityId,
     courseId: material.courseId,
     topicId: material.topicId,

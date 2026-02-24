@@ -18,6 +18,21 @@ const listStudyMaterialsSchema = Joi.object({
   sortBy: Joi.string().valid('createdAt', 'downloadCount', 'views', '-createdAt', '-downloadCount', '-views').default('createdAt'),
 });
 
+const updateStudyMaterialSchema = Joi.object({
+  title: Joi.string().min(5).max(200).optional(),
+  description: Joi.string().max(1000).allow('').optional(),
+  topicId: Joi.string().regex(/^[0-9a-fA-F]{24}$/).allow(null).optional(),
+  accessLevel: Joi.string().valid('free', 'basic', 'premium').optional(),
+  fileType: Joi.string().valid('pdf', 'image', 'text', 'video', 'document', 'docx').optional(),
+  fileUrl: Joi.string().uri().optional(),
+  fileSize: Joi.number().optional(),
+}).min(1);
+
+const studyMaterialParamsSchema = Joi.object({
+  courseId: Joi.string().regex(/^[0-9a-fA-F]{24}$/).required(),
+  materialId: Joi.string().regex(/^[0-9a-fA-F]{24}$/).required(),
+});
+
 const rateStudyMaterialSchema = Joi.object({
   rating: Joi.number().integer().min(1).max(5).required(),
 });
@@ -25,5 +40,7 @@ const rateStudyMaterialSchema = Joi.object({
 module.exports = {
   uploadStudyMaterialSchema,
   listStudyMaterialsSchema,
+  updateStudyMaterialSchema,
+  studyMaterialParamsSchema,
   rateStudyMaterialSchema,
 };

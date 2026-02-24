@@ -52,6 +52,7 @@ router.use(verifyToken, isAdmin);
 // Pricing management
 router.get('/pricing', adminPricingController.getPlanPricing);
 router.put('/pricing/:plan', validate(updatePricingSchema), adminPricingController.updatePlanPricing);
+router.delete('/pricing/:plan', adminPricingController.deletePlanPricing);
 router.get('/pricing/:plan/history', adminPricingController.getPricingHistory);
 router.get('/pricing/analytics', adminPricingController.getPricingAnalytics);
 

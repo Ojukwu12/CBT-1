@@ -16,7 +16,13 @@ class ExamService {
       return null;
     }
 
-    return user.plan === 'free' ? 40 : 70;
+    const limitsByPlan = {
+      free: 120,
+      basic: 200,
+      premium: 250,
+    };
+
+    return limitsByPlan[user.plan] ?? limitsByPlan.free;
   }
 
   static getCurrentDayBounds() {
@@ -231,7 +237,13 @@ class ExamService {
     ]);
 
     if (questions.length === 0) {
-      throw new ApiError(404, 'No questions available for this exam configuration');
+      throw new ApiError(404, 'No questions available for this exam configuration', {
+        dailyLimit,
+        usedToday: questionsUsedTodayForCourse,
+        remainingToday: dailyLimit === null ? null : remainingQuestionsForCourseToday,
+        resetsAt: dailyLimitStatus.resetsAt,
+        scope: 'per_course'
+      });
     }
 
     // Create exam session

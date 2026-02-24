@@ -1,12 +1,38 @@
 const { normalizeText } = require('./fileExtraction');
 const { sanitizeQuestionText } = require('./questionText');
 
-const QUESTION_START_REGEX = /^\s*(?:Q\s*\d+|Question\s*\d+|\d+)\s*[\).:-]\s*(.+)$/i;
-const OPTION_REGEX = /^\s*([A-D])\s*[\).:-]\s*(.+)$/i;
+const QUESTION_START_REGEX = /^\s*(?:Q(?:uestion)?\s*)?(\d{1,3})\s*[\).:-]?\s+(.+)$/i;
+const OPTION_REGEX = /^\s*\(?([A-Da-d])\)?\s*[\).:-]\s*(.+)$/;
 const ANSWER_REGEX = /\b(?:right(?:\s+answer|\s+option)?|answer|ans|correct(?:\s+answer)?|correct\s+option|correct)\b\s*[:\-]?\s*([A-D])\b/i;
+const HEADER_LINE_REGEXES = [
+  /^\s*(department|faculty|course|course\s*code|code|exam|semester|session|level|time\s*(allowed|limit|taken)?|duration|instructions?)\b\s*[:\-]?/i,
+  /^\s*(answer\s+all\s+questions|attempt\s+all\s+questions|choose\s+any\s+\d+|all\s+questions\s+carry)/i,
+  /^\s*(name|matric\s*(no|number)|registration\s*(no|number)|date)\b\s*[:\-]?/i,
+];
+
+const isHeadingOrMetadataLine = (line = '') => {
+  const trimmed = String(line).trim();
+  if (!trimmed) {
+    return true;
+  }
+
+  if (HEADER_LINE_REGEXES.some((regex) => regex.test(trimmed))) {
+    return true;
+  }
+
+  if (/^[A-Z\s\-(),.]{6,}$/.test(trimmed) && !/[?.!]/.test(trimmed)) {
+    return true;
+  }
+
+  return false;
+};
 
 const splitIntoBlocks = (text) => {
-  const lines = normalizeText(text).split(/\n+/);
+  const lines = normalizeText(text)
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
   const blocks = [];
   let current = [];
 
@@ -35,6 +61,7 @@ const parseBlock = (block) => {
   let questionText = '';
   const options = {};
   let correctAnswer = null;
+  let hasQuestionStem = false;
 
   const answerMatch = block.match(ANSWER_REGEX);
   if (answerMatch) {
@@ -49,7 +76,8 @@ const parseBlock = (block) => {
 
     const questionMatch = line.match(QUESTION_START_REGEX);
     if (questionMatch) {
-      textLines.push(questionMatch[1].trim());
+      hasQuestionStem = true;
+      textLines.push(questionMatch[2].trim());
       continue;
     }
 
@@ -59,7 +87,15 @@ const parseBlock = (block) => {
       continue;
     }
 
+    if (!hasQuestionStem && isHeadingOrMetadataLine(line)) {
+      continue;
+    }
+
     textLines.push(line);
+  }
+
+  if (!hasQuestionStem) {
+    return null;
   }
 
   questionText = sanitizeQuestionText(textLines.join(' '));

@@ -55,6 +55,7 @@ const updatePlanPricing = asyncHandler(async (req, res) => {
     if (name) pricing.name = name;
     if (duration) pricing.duration = duration;
     if (features) pricing.features = features;
+    pricing.isActive = true;
     pricing.updatedBy = req.user.id;
   }
 
@@ -66,6 +67,37 @@ const updatePlanPricing = asyncHandler(async (req, res) => {
     success: true,
     data: pricing,
     message: 'Plan pricing updated successfully',
+  });
+});
+
+/**
+ * Delete (deactivate) a plan pricing configuration
+ * DELETE /api/admin/pricing/:plan
+ */
+const deletePlanPricing = asyncHandler(async (req, res) => {
+  const { plan } = req.params;
+
+  const pricing = await PlanPricing.findOne({ plan });
+  if (!pricing) {
+    throw new ApiError(404, 'Pricing not found');
+  }
+
+  if (!pricing.isActive) {
+    return res.status(200).json({
+      success: true,
+      message: `${plan} pricing is already deleted`,
+    });
+  }
+
+  pricing.isActive = false;
+  pricing.updatedBy = req.user.id;
+  await pricing.save();
+
+  logger.info(`Plan pricing deleted for ${plan} by admin ${req.user.id}`);
+
+  res.status(200).json({
+    success: true,
+    message: `${plan} pricing deleted successfully. Existing users keep their current tier until expiry or manual plan change.`,
   });
 });
 
@@ -357,6 +389,7 @@ module.exports = {
   getPlanPricing,
   updatePlanPricing,
   getPricingHistory,
+  deletePlanPricing,
   createPromoCode,
   listPromoCodes,
   updatePromoCode,

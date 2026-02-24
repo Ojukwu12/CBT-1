@@ -7,6 +7,105 @@ const storageService = require('../services/storageService');
 const { inferFileTypeFromUpload } = require('../utils/fileType');
 const ApiError = require('../utils/ApiError');
 const UserAnalytics = require('../models/UserAnalytics');
+const User = require('../models/User');
+const path = require('path');
+const mime = require('mime-types');
+const { downloadFile } = require('../utils/fileExtraction');
+
+const getDownloadLimitByPlan = (user) => {
+  if (!user || user.role === 'admin') {
+    return null;
+  }
+
+  if (user.plan === 'free') {
+    return 7;
+  }
+
+  return null;
+};
+
+const getTodayBounds = () => {
+  const dayStart = new Date();
+  dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(dayStart);
+  dayEnd.setDate(dayEnd.getDate() + 1);
+  return { dayStart, dayEnd };
+};
+
+const getFileExtensionFromMaterial = (material) => {
+  const fromUrl = (() => {
+    try {
+      if (!material?.fileUrl) return '';
+      if (/^https?:\/\//i.test(material.fileUrl)) {
+        const url = new URL(material.fileUrl);
+        return path.extname(url.pathname || '');
+      }
+      return path.extname(material.fileUrl);
+    } catch (_) {
+      return '';
+    }
+  })();
+
+  if (fromUrl) {
+    return fromUrl;
+  }
+
+  const byType = {
+    pdf: '.pdf',
+    image: '.jpg',
+    text: '.txt',
+    video: '.mp4',
+    document: '.docx',
+    docx: '.docx',
+  };
+
+  return byType[material?.fileType] || '';
+};
+
+const buildDownloadFilename = (material) => {
+  const ext = getFileExtensionFromMaterial(material);
+  const baseTitle = String(material?.title || 'study-material')
+    .trim()
+    .replace(/[^a-zA-Z0-9-_\s]/g, '')
+    .replace(/\s+/g, '-') || 'study-material';
+
+  return `${baseTitle}${ext}`;
+};
+
+const getDownloadLimitStatusForUser = async (userId) => {
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new ApiError(404, 'User not found');
+  }
+
+  if (user.plan !== 'free' && user.planExpiresAt && new Date() > user.planExpiresAt) {
+    user.plan = 'free';
+    user.planExpiresAt = null;
+    await user.save();
+  }
+
+  const dailyLimit = getDownloadLimitByPlan(user);
+  const { dayStart, dayEnd } = getTodayBounds();
+  const analytics = await UserAnalytics.findOne({ userId: user._id });
+
+  const usedToday = (analytics?.downloadedMaterials || []).reduce((count, item) => {
+    if (!item?.downloadedAt) {
+      return count;
+    }
+
+    const downloadedAt = new Date(item.downloadedAt);
+    return downloadedAt >= dayStart && downloadedAt < dayEnd ? count + 1 : count;
+  }, 0);
+
+  return {
+    userTier: user.role === 'admin' ? 'admin' : user.plan,
+    dailyLimit,
+    usedToday,
+    remainingToday: dailyLimit === null ? null : Math.max(dailyLimit - usedToday, 0),
+    resetsAt: dayEnd,
+    scope: 'study_material_downloads',
+  };
+};
 
 const inferUploadStudyMaterialFileType = (req, res, next) => {
   if (!req.body.fileType && req.file) {
@@ -147,8 +246,19 @@ const downloadStudyMaterial = asyncHandler(async (req, res) => {
     throw new ApiError(403, 'This study material is no longer available');
   }
 
+  // Load current user to enforce active plan limits accurately
+  const user = await User.findById(req.user.id);
+  if (!user) {
+    throw new ApiError(404, 'User not found');
+  }
+
+  if (user.plan !== 'free' && user.planExpiresAt && new Date() > user.planExpiresAt) {
+    user.plan = 'free';
+    user.planExpiresAt = null;
+    await user.save();
+  }
+
   // Check access level
-  const user = req.user;
   if (material.accessLevel !== 'free') {
     // Admins have full access (same as premium)
     if (user.role !== 'admin') {
@@ -160,41 +270,121 @@ const downloadStudyMaterial = asyncHandler(async (req, res) => {
     }
   }
 
+  const limitStatus = await getDownloadLimitStatusForUser(req.user.id);
+  if (limitStatus.dailyLimit !== null && limitStatus.remainingToday <= 0) {
+    throw new ApiError(429, `Daily download limit reached for free tier (${limitStatus.dailyLimit}/day). Upgrade your plan for unlimited downloads.`, {
+      dailyLimit: limitStatus.dailyLimit,
+      usedToday: limitStatus.usedToday,
+      remainingToday: 0,
+      resetsAt: limitStatus.resetsAt,
+      scope: 'study_material_downloads'
+    });
+  }
+
+  let analytics = await UserAnalytics.findOne({ userId: user._id });
+
   // Increment download count
   await StudyMaterial.findByIdAndUpdate(materialId, { $inc: { downloadCount: 1 } });
 
   // Track download in UserAnalytics
   if (user) {
-    const analytics = await UserAnalytics.findOne({ userId: user.id });
-    if (analytics) {
-      analytics.materialsDownloaded = (analytics.materialsDownloaded || 0) + 1;
-      
-      if (!analytics.downloadedMaterials) {
-        analytics.downloadedMaterials = [];
-      }
-      
-      analytics.downloadedMaterials.push({
-        materialId,
-        materialTitle: material.title,
-        courseId: material.courseId,
-        downloadedAt: new Date(),
-        fileSize: material.fileSize,
-      });
-      
-      await analytics.save();
+    if (!analytics) {
+      analytics = new UserAnalytics({ userId: user._id });
     }
+
+    analytics.materialsDownloaded = (analytics.materialsDownloaded || 0) + 1;
+
+    if (!analytics.downloadedMaterials) {
+      analytics.downloadedMaterials = [];
+    }
+
+    analytics.downloadedMaterials.push({
+      materialId,
+      materialTitle: material.title,
+      courseId: material.courseId,
+      downloadedAt: new Date(),
+      fileSize: material.fileSize,
+    });
+
+    await analytics.save();
   }
+
+  let fileBuffer;
+  try {
+    fileBuffer = await downloadFile(material.fileUrl);
+  } catch (error) {
+    throw new ApiError(502, 'Unable to fetch study material file for download');
+  }
+
+  const filename = buildDownloadFilename(material);
+  const contentType = mime.lookup(filename) || 'application/octet-stream';
+
+  res.setHeader('Content-Type', contentType);
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.setHeader('Content-Length', fileBuffer.length);
+  return res.status(200).send(fileBuffer);
+});
+
+const getDownloadLimitStatus = asyncHandler(async (req, res) => {
+  const status = await getDownloadLimitStatusForUser(req.user.id);
 
   res.status(200).json({
     success: true,
-    data: {
-      materialId: material._id,
-      title: material.title,
-      downloadUrl: material.fileUrl,
-      fileType: material.fileType,
-      fileSize: material.fileSize,
-    },
-    message: 'Download link ready',
+    data: status,
+    message: 'Study material download limit status retrieved',
+  });
+});
+
+const updateStudyMaterial = asyncHandler(async (req, res) => {
+  const { materialId } = req.params;
+  const updates = req.body;
+
+  const material = await StudyMaterial.findById(materialId);
+  if (!material) {
+    throw new ApiError(404, 'Study material not found');
+  }
+
+  if (!material.isActive) {
+    throw new ApiError(400, 'Cannot update an inactive study material');
+  }
+
+  const allowedUpdates = ['title', 'description', 'topicId', 'accessLevel', 'fileType', 'fileUrl', 'fileSize'];
+  allowedUpdates.forEach((field) => {
+    if (updates[field] !== undefined) {
+      material[field] = updates[field];
+    }
+  });
+
+  await material.save();
+
+  res.status(200).json({
+    success: true,
+    data: material,
+    message: 'Study material updated successfully',
+  });
+});
+
+const deleteStudyMaterial = asyncHandler(async (req, res) => {
+  const { materialId } = req.params;
+
+  const material = await StudyMaterial.findById(materialId);
+  if (!material) {
+    throw new ApiError(404, 'Study material not found');
+  }
+
+  if (!material.isActive) {
+    return res.status(200).json({
+      success: true,
+      message: 'Study material already deleted',
+    });
+  }
+
+  material.isActive = false;
+  await material.save();
+
+  res.status(200).json({
+    success: true,
+    message: 'Study material deleted successfully',
   });
 });
 
@@ -300,6 +490,9 @@ module.exports = {
   listStudyMaterials,
   getStudyMaterial,
   downloadStudyMaterial,
+  getDownloadLimitStatus,
+  updateStudyMaterial,
+  deleteStudyMaterial,
   rateStudyMaterial,
   getStudyMaterialsByHierarchy,
 };

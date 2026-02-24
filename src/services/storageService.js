@@ -51,6 +51,7 @@ const uploadToS3 = async ({ buffer, fileName, mimeType }) => {
         Key: key,
         Body: buffer,
         ContentType: mimeType || 'application/octet-stream',
+        ContentDisposition: `attachment; filename=\"${fileName || 'material'}\"`,
       })
     );
   } catch (error) {
