@@ -1,7 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
-const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const mime = require('mime-types');
 const { env } = require('../config/env');
 const ApiError = require('../utils/ApiError');
@@ -87,6 +88,58 @@ const uploadBuffer = async ({ buffer, fileName, mimeType }) => {
   return uploadToLocal({ buffer, fileName, mimeType });
 };
 
+const generatePresignedUrl = async ({ fileUrl, expiresIn = 300, fileName }) => {
+  const provider = (env.STORAGE_PROVIDER || 'local').toLowerCase();
+
+  // For local files, return the original URL
+  if (provider !== 's3' || !fileUrl.includes('.s3.')) {
+    return fileUrl;
+  }
+
+  if (!env.S3_BUCKET || !env.S3_REGION || !env.S3_ACCESS_KEY_ID || !env.S3_SECRET_ACCESS_KEY) {
+    throw new ApiError(500, 'S3 storage is not fully configured');
+  }
+
+  // Extract the S3 key from the URL
+  const urlPattern = new RegExp(`https://${env.S3_BUCKET}\.s3\.${env.S3_REGION}\.amazonaws\.com/(.+)`);
+  const match = fileUrl.match(urlPattern);
+  
+  if (!match || !match[1]) {
+    throw new ApiError(400, 'Invalid S3 file URL');
+  }
+
+  const key = decodeURIComponent(match[1]);
+  const s3 = getS3Client();
+
+  const command = new GetObjectCommand({
+    Bucket: env.S3_BUCKET,
+    Key: key,
+    ResponseContentDisposition: fileName 
+      ? `attachment; filename="${fileName}"`
+      : 'attachment',
+  });
+
+  try {
+    const presignedUrl = await getSignedUrl(s3, command, { expiresIn });
+    return presignedUrl;
+  } catch (error) {
+    const isAccessDenied =
+      error?.name === 'AccessDenied' ||
+      error?.Code === 'AccessDenied' ||
+      error?.$metadata?.httpStatusCode === 403;
+
+    if (isAccessDenied) {
+      throw new ApiError(
+        403,
+        `S3 access denied. Ensure s3:GetObject permission is granted on arn:aws:s3:::${env.S3_BUCKET}/materials/* for the configured IAM user.`
+      );
+    }
+
+    throw error;
+  }
+};
+
 module.exports = {
   uploadBuffer,
+  generatePresignedUrl,
 };

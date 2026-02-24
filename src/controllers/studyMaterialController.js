@@ -9,8 +9,6 @@ const ApiError = require('../utils/ApiError');
 const UserAnalytics = require('../models/UserAnalytics');
 const User = require('../models/User');
 const path = require('path');
-const mime = require('mime-types');
-const { downloadFile } = require('../utils/fileExtraction');
 
 const getDownloadLimitByPlan = (user) => {
   if (!user || user.role === 'admin') {
@@ -309,20 +307,30 @@ const downloadStudyMaterial = asyncHandler(async (req, res) => {
     await analytics.save();
   }
 
-  let fileBuffer;
+  // Generate presigned URL for direct S3 download (valid for 5 minutes)
+  const filename = buildDownloadFilename(material);
+  let downloadUrl;
+
   try {
-    fileBuffer = await downloadFile(material.fileUrl);
+    downloadUrl = await storageService.generatePresignedUrl({
+      fileUrl: material.fileUrl,
+      expiresIn: 300, // 5 minutes
+      fileName: filename,
+    });
   } catch (error) {
-    throw new ApiError(502, 'Unable to fetch study material file for download');
+    throw new ApiError(502, 'Unable to generate download URL for study material');
   }
 
-  const filename = buildDownloadFilename(material);
-  const contentType = mime.lookup(filename) || 'application/octet-stream';
-
-  res.setHeader('Content-Type', contentType);
-  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-  res.setHeader('Content-Length', fileBuffer.length);
-  return res.status(200).send(fileBuffer);
+  res.status(200).json({
+    success: true,
+    data: {
+      downloadUrl,
+      fileName: filename,
+      fileSize: material.fileSize,
+      expiresIn: 300,
+    },
+    message: 'Study material download URL generated successfully',
+  });
 });
 
 const getDownloadLimitStatus = asyncHandler(async (req, res) => {
