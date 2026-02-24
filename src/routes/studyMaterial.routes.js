@@ -25,23 +25,37 @@ router.get('/downloads/limit-status', studyMaterialController.getDownloadLimitSt
 
 // Upload study material (admin/faculty only)
 router.post('/:courseId/upload', isAdmin, upload.single('file'), studyMaterialController.uploadStudyMaterial);
+// Preferred upload route (uses parent :courseId)
+router.post('/upload', isAdmin, upload.single('file'), studyMaterialController.uploadStudyMaterial);
 
 // List study materials for a course
 router.get('/:courseId', studyMaterialController.listStudyMaterials);
+// Preferred list route (uses parent :courseId)
+router.get('/', studyMaterialController.listStudyMaterials);
 
 // Get specific study material
 router.get('/:courseId/:materialId', studyMaterialController.getStudyMaterial);
+// Preferred get route (uses parent :courseId)
+router.get('/:materialId', studyMaterialController.getStudyMaterial);
 
 // Download study material (logs download)
 router.post('/:courseId/:materialId/download', studyMaterialController.downloadStudyMaterial);
+// Preferred download route (uses parent :courseId)
+router.post('/:materialId/download', studyMaterialController.downloadStudyMaterial);
 
 // Update study material (admin/faculty only)
 router.patch('/:courseId/:materialId', isAdmin, validate(studyMaterialParamsSchema, 'params'), validate(updateStudyMaterialSchema), studyMaterialController.updateStudyMaterial);
+// Preferred update route (uses parent :courseId)
+router.patch('/:materialId', isAdmin, validate(updateStudyMaterialSchema), studyMaterialController.updateStudyMaterial);
 
 // Delete study material (admin/faculty only)
 router.delete('/:courseId/:materialId', isAdmin, validate(studyMaterialParamsSchema, 'params'), studyMaterialController.deleteStudyMaterial);
+// Preferred delete route (uses parent :courseId)
+router.delete('/:materialId', isAdmin, studyMaterialController.deleteStudyMaterial);
 
 // Rate study material
 router.post('/:courseId/:materialId/rate', studyMaterialController.rateStudyMaterial);
+// Preferred rate route (uses parent :courseId)
+router.post('/:materialId/rate', studyMaterialController.rateStudyMaterial);
 
 module.exports = router;
