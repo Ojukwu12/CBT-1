@@ -122,6 +122,7 @@ class PaystackService {
       const payload = {
         email,
         amount: amountInKobo,
+        callback_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/payments/callback`,
         metadata: {
           userId,
           plan,
