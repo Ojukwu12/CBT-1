@@ -4,6 +4,8 @@ const { verifyToken } = require('../middleware/auth.middleware');
 const { longOperationTimeout } = require('../middleware/timeout.middleware');
 const { aiLimiter } = require('../middleware/rateLimit.middleware');
 const { upload } = require('../middleware/upload.middleware');
+const validate = require('../middleware/validate.middleware');
+const { deleteSourceMaterialsSchema } = require('../validators/material.validator');
 const ApiError = require('../utils/ApiError');
 
 const isAdmin = (req, res, next) => {
@@ -21,6 +23,8 @@ router.use(verifyToken);
 router.post('/', isAdmin, upload.single('file'), materialController.uploadSourceMaterial);
 // List source materials (for question extraction status)
 router.get('/', materialController.listSourceMaterialsByCourse);
+// Delete source materials by upload outcome (successful|unsuccessful|all)
+router.delete('/', isAdmin, validate(deleteSourceMaterialsSchema, 'query'), materialController.deleteSourceMaterialsByUploadOutcome);
 // Get specific source material
 router.get('/:id', materialController.getSourceMaterial);
 // Generate questions from source material (OCR/AI extraction)

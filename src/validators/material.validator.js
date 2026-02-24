@@ -30,8 +30,13 @@ const importQuestionsSchema = Joi.object({
   ).min(1).optional(),
 });
 
+const deleteSourceMaterialsSchema = Joi.object({
+  uploadOutcome: Joi.string().valid('successful', 'unsuccessful', 'all').default('all'),
+});
+
 module.exports = {
   uploadMaterialSchema,
   generateQuestionsSchema,
   importQuestionsSchema,
+  deleteSourceMaterialsSchema,
 };

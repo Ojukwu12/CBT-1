@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
-const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const mime = require('mime-types');
 const { env } = require('../config/env');
@@ -88,6 +88,54 @@ const uploadBuffer = async ({ buffer, fileName, mimeType }) => {
   return uploadToLocal({ buffer, fileName, mimeType });
 };
 
+const deleteLocalFile = async (fileUrl) => {
+  if (!fileUrl || !fileUrl.startsWith('/uploads/')) {
+    return;
+  }
+
+  const uploadsDir = ensureUploadsDir();
+  const fileName = fileUrl.replace('/uploads/', '');
+  const filePath = path.join(uploadsDir, fileName);
+
+  if (fs.existsSync(filePath)) {
+    await fs.promises.unlink(filePath);
+  }
+};
+
+const deleteS3File = async (fileUrl) => {
+  if (!env.S3_BUCKET || !env.S3_REGION || !env.S3_ACCESS_KEY_ID || !env.S3_SECRET_ACCESS_KEY) {
+    throw new ApiError(500, 'S3 storage is not fully configured');
+  }
+
+  const urlPattern = new RegExp(`https://${env.S3_BUCKET}\\.s3\\.${env.S3_REGION}\\.amazonaws\\.com/(.+)`);
+  const match = fileUrl.match(urlPattern);
+
+  if (!match || !match[1]) {
+    return;
+  }
+
+  const key = decodeURIComponent(match[1]);
+  const s3 = getS3Client();
+
+  await s3.send(
+    new DeleteObjectCommand({
+      Bucket: env.S3_BUCKET,
+      Key: key,
+    })
+  );
+};
+
+const deleteFile = async (fileUrl) => {
+  const provider = (env.STORAGE_PROVIDER || 'local').toLowerCase();
+
+  if (provider === 's3') {
+    await deleteS3File(fileUrl);
+    return;
+  }
+
+  await deleteLocalFile(fileUrl);
+};
+
 const generatePresignedUrl = async ({ fileUrl, expiresIn = 300, fileName }) => {
   const provider = (env.STORAGE_PROVIDER || 'local').toLowerCase();
 
@@ -141,5 +189,6 @@ const generatePresignedUrl = async ({ fileUrl, expiresIn = 300, fileName }) => {
 
 module.exports = {
   uploadBuffer,
+  deleteFile,
   generatePresignedUrl,
 };

@@ -157,6 +157,67 @@ const listSourceMaterialsByCourse = asyncHandler(async (req, res) => {
   });
 });
 
+const deleteSourceMaterialsByUploadOutcome = asyncHandler(async (req, res) => {
+  const { courseId } = req.params;
+  const { uploadOutcome = 'all' } = req.query;
+
+  await courseService.getCourseById(courseId);
+
+  const baseQuery = {
+    courseId,
+    isActive: true,
+  };
+
+  if (uploadOutcome === 'successful') {
+    baseQuery.processingStatus = { $in: ['uploaded', 'processing', 'completed'] };
+  } else if (uploadOutcome === 'unsuccessful') {
+    baseQuery.processingStatus = 'failed';
+  }
+
+  const materials = await SourceMaterial.find(baseQuery).select('_id fileUrl');
+
+  if (!materials.length) {
+    return res.status(200).json({
+      success: true,
+      data: {
+        requestedOutcome: uploadOutcome,
+        deletedCount: 0,
+        fileDeleteFailures: 0,
+      },
+      message: 'No source materials found for the selected upload outcome',
+    });
+  }
+
+  let fileDeleteFailures = 0;
+  for (const material of materials) {
+    if (!material.fileUrl) {
+      continue;
+    }
+
+    try {
+      await storageService.deleteFile(material.fileUrl);
+    } catch (error) {
+      fileDeleteFailures += 1;
+    }
+  }
+
+  const materialIds = materials.map((material) => material._id);
+  const updateResult = await SourceMaterial.updateMany(
+    { _id: { $in: materialIds } },
+    { $set: { isActive: false } }
+  );
+
+  res.status(200).json({
+    success: true,
+    data: {
+      requestedOutcome: uploadOutcome,
+      deletedCount: updateResult.modifiedCount || 0,
+      fileDeleteFailures,
+    },
+    message: 'Source materials deleted successfully',
+  });
+});
+
 // Keep old function name for backward compatibility
 const listMaterialsByCourse = asyncHandler(async (req, res) => {
   const { courseId } = req.params;
@@ -242,6 +303,7 @@ module.exports = {
   getSourceMaterial,
   getMaterial: getSourceMaterial, // backward compatibility
   listSourceMaterialsByCourse,
+  deleteSourceMaterialsByUploadOutcome,
   listMaterialsByCourse,
   generateQuestionsFromMaterial,
   importQuestionsFromMaterial,
