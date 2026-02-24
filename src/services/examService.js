@@ -7,6 +7,7 @@ const Topic = require('../models/Topic');
 const User = require('../models/User');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
+const { sanitizeQuestionText } = require('../utils/questionText');
 const { env } = require('../config/env');
 
 class ExamService {
@@ -181,7 +182,7 @@ class ExamService {
         : { type: user.plan, maxQuestions: 100, note: `${user.plan} tier can select 1-100 questions` },
       questions: questions.map(q => ({
         questionId: q._id,
-        text: q.text,
+        text: sanitizeQuestionText(q.text),
         options: q.options,
         difficulty: q.difficulty
       }))
@@ -451,7 +452,7 @@ class ExamService {
 
         return {
           questionId: attemptId,
-          text: question?.text || '[Question no longer available]',
+          text: question ? sanitizeQuestionText(question.text) : '[Question no longer available]',
           options: question?.options || {},
           difficulty: question?.difficulty || null,
           selectedAnswer: attempt.selectedAnswer,

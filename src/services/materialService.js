@@ -6,6 +6,7 @@ const Topic = require('../models/Topic');
 const { generateQuestions } = require('../utils/questionGenerator');
 const { extractTextFromMaterial } = require('../utils/fileExtraction');
 const { detectQuestionBank } = require('../utils/questionBankDetector');
+const { sanitizeQuestionText } = require('../utils/questionText');
 const { env } = require('../config/env');
 const ApiError = require('../utils/ApiError');
 
@@ -41,13 +42,17 @@ const filterUniqueQuestions = (questions, existingTextSet) => {
   const unique = [];
 
   for (const question of questions || []) {
-    const normalizedText = normalizeQuestionText(question?.text);
+    const cleanedText = sanitizeQuestionText(question?.text);
+    const normalizedText = normalizeQuestionText(cleanedText);
     if (!normalizedText || existingTextSet.has(normalizedText)) {
       continue;
     }
 
     existingTextSet.add(normalizedText);
-    unique.push(question);
+    unique.push({
+      ...question,
+      text: cleanedText,
+    });
   }
 
   return unique;
@@ -198,7 +203,7 @@ const generateQuestionsFromMaterial = async (
       departmentId: course.departmentId,
       level: course.level,
       createdBy: adminId,
-      text: q.text,
+      text: sanitizeQuestionText(q.text),
       options: q.options,
       correctAnswer: q.correctAnswer,
       difficulty: q.difficulty || 'medium',
@@ -361,7 +366,7 @@ const generateQuestionsFromMaterial = async (
       departmentId: course.departmentId,
       level: course.level,
       createdBy: adminId,
-      text: q.text,
+      text: sanitizeQuestionText(q.text),
       options: q.options,
       correctAnswer: q.correctAnswer,
       difficulty: q.difficulty,
@@ -457,7 +462,7 @@ const importQuestionsFromMaterial = async (materialId, adminId, questions) => {
     departmentId: course.departmentId,
     level: course.level,
     createdBy: adminId,
-    text: q.text,
+    text: sanitizeQuestionText(q.text),
     options: q.options,
     correctAnswer: q.correctAnswer,
     difficulty: q.difficulty || 'medium',

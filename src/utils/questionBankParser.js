@@ -1,4 +1,5 @@
 const { normalizeText } = require('./fileExtraction');
+const { sanitizeQuestionText } = require('./questionText');
 
 const QUESTION_START_REGEX = /^\s*(?:Q\s*\d+|Question\s*\d+|\d+)\s*[\).:-]\s*(.+)$/i;
 const OPTION_REGEX = /^\s*([A-D])\s*[\).:-]\s*(.+)$/i;
@@ -42,6 +43,10 @@ const parseBlock = (block) => {
 
   const textLines = [];
   for (const line of lines) {
+    if (ANSWER_REGEX.test(line)) {
+      continue;
+    }
+
     const questionMatch = line.match(QUESTION_START_REGEX);
     if (questionMatch) {
       textLines.push(questionMatch[1].trim());
@@ -57,7 +62,7 @@ const parseBlock = (block) => {
     textLines.push(line);
   }
 
-  questionText = textLines.join(' ').replace(/\s+/g, ' ').trim();
+  questionText = sanitizeQuestionText(textLines.join(' '));
 
   if (!questionText) {
     return null;
