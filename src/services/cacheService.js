@@ -6,10 +6,12 @@ const logger = new Logger('CacheService');
 class CacheService {
   constructor() {
     this.redisClient = null;
-    this.isRedisEnabled = Boolean(env.REDIS_URL);
+    this.isRedisEnabled = Boolean(env.REDIS_URL || env.REDIS_HOST);
     this.memoryCache = new Map();
     this.defaultTTL = env.CACHE_DEFAULT_TTL_SECONDS || 120;
     this.redisUnavailableLogged = false;
+    this.redisDisabledUntil = 0;
+    this.redisRetryBackoffMs = env.REDIS_RETRY_BACKOFF_MS || 60000;
     this.metricsEnabled = env.CACHE_METRICS_ENABLED;
     this.metricsLogEvery = env.CACHE_METRICS_LOG_EVERY || 500;
     this.metrics = {
@@ -72,8 +74,30 @@ class CacheService {
     };
   }
 
+  buildRedisUrl() {
+    if (env.REDIS_URL) {
+      return env.REDIS_URL;
+    }
+
+    if (!env.REDIS_HOST) {
+      return null;
+    }
+
+    const protocol = env.REDIS_USE_TLS ? 'rediss' : 'redis';
+    const username = encodeURIComponent(env.REDIS_USERNAME || 'default');
+    const password = env.REDIS_PASSWORD ? encodeURIComponent(env.REDIS_PASSWORD) : '';
+    const auth = password ? `${username}:${password}@` : '';
+    const port = env.REDIS_PORT || 6379;
+
+    return `${protocol}://${auth}${env.REDIS_HOST}:${port}`;
+  }
+
   async getRedisClient() {
     if (!this.isRedisEnabled) {
+      return null;
+    }
+
+    if (Date.now() < this.redisDisabledUntil) {
       return null;
     }
 
@@ -82,25 +106,41 @@ class CacheService {
     }
 
     try {
+      const redisUrl = this.buildRedisUrl();
+      if (!redisUrl) {
+        return null;
+      }
+
       const { createClient } = require('redis');
       const client = createClient({
-        url: env.REDIS_URL,
+        url: redisUrl,
+        socket: {
+          reconnectStrategy: () => false,
+        },
       });
 
       client.on('error', (error) => {
-        logger.error('Redis client error', error);
+        this.trackMetrics('redisError');
+        if (!this.redisUnavailableLogged) {
+          logger.error('Redis client error', error);
+          this.redisUnavailableLogged = true;
+        }
       });
 
       await client.connect();
       this.redisClient = client;
       this.redisUnavailableLogged = false;
+      this.redisDisabledUntil = 0;
       logger.info('Redis cache connected');
       return this.redisClient;
     } catch (error) {
+      this.trackMetrics('redisError');
+      this.redisDisabledUntil = Date.now() + this.redisRetryBackoffMs;
       if (!this.redisUnavailableLogged) {
-        logger.warn('Redis unavailable, falling back to memory cache');
+        logger.warn(`Redis unavailable, falling back to memory cache for ${Math.round(this.redisRetryBackoffMs / 1000)}s`);
         this.redisUnavailableLogged = true;
       }
+      this.redisClient = null;
       return null;
     }
   }

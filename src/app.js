@@ -107,6 +107,11 @@ app.get('/', (req, res) => {
   });
 });
 
+// Silence browser favicon probes
+app.get('/favicon.ico', (req, res) => {
+  res.status(204).end();
+});
+
 // Routes
 app.use('/api/health', healthRoutes);
 app.use('/api/auth', authRoutes);
