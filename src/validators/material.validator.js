@@ -24,7 +24,7 @@ const importQuestionsSchema = Joi.object({
         C: Joi.string().required(),
         D: Joi.string().required(),
       }).required(),
-      correctAnswer: Joi.string().valid('A','B','C','D').required(),
+      correctAnswer: Joi.string().valid('A','B','C','D').optional(),
       difficulty: Joi.string().valid('easy','medium','hard').optional(),
     })
   ).min(1).optional(),

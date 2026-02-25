@@ -146,19 +146,19 @@ const generateQuestionsFromMaterial = async (
 
   let parsed = detectQuestionBank(material.content);
 
-  if (!parsed.isQuestionBank && material.fileType === 'image' && material.fileUrl) {
-    const ocrAttemptContent = await extractTextFromMaterial({
+  if (!parsed.isQuestionBank && material.fileUrl) {
+    const refreshedExtraction = await extractTextFromMaterial({
       fileUrl: material.fileUrl,
       fileType: material.fileType,
     });
 
-    if (ocrAttemptContent) {
-      const ocrParsed = detectQuestionBank(ocrAttemptContent);
-      if (ocrParsed.isQuestionBank) {
-        material.content = ocrAttemptContent;
+    if (refreshedExtraction) {
+      const refreshedParsed = detectQuestionBank(refreshedExtraction);
+      if (refreshedParsed.isQuestionBank) {
+        material.content = refreshedExtraction;
         material.extractionMethod = 'ocr';
         await material.save();
-        parsed = ocrParsed;
+        parsed = refreshedParsed;
       }
     }
   }
