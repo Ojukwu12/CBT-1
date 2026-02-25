@@ -111,6 +111,16 @@ const getQuestionsByTopicAndDifficulty = async (
 };
 
 const approveQuestion = async (questionId, adminId, notes = '') => {
+  const pendingQuestion = await Question.findById(questionId);
+
+  if (!pendingQuestion) {
+    throw new ApiError(404, 'Question not found');
+  }
+
+  if (!['A', 'B', 'C', 'D'].includes(pendingQuestion.correctAnswer)) {
+    throw new ApiError(400, 'Question is missing a correct answer. Please provide an answer before approval.');
+  }
+
   const question = await Question.findByIdAndUpdate(
     questionId,
     {
@@ -120,10 +130,6 @@ const approveQuestion = async (questionId, adminId, notes = '') => {
     },
     { new: true }
   );
-
-  if (!question) {
-    throw new ApiError(404, 'Question not found');
-  }
 
   return question;
 };

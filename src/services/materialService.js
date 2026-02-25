@@ -164,21 +164,6 @@ const generateQuestionsFromMaterial = async (
   }
 
   if (parsed.isQuestionBank) {
-    if (parsed.missingAnswers > 0) {
-      await SourceMaterial.findByIdAndUpdate(materialId, {
-        processingStatus: 'completed',
-        processingCompletedAt: new Date(),
-        extractionMethod: 'ocr',
-      });
-
-      return {
-        mode: 'question_bank',
-        missingAnswers: parsed.missingAnswers,
-        extractedQuestions: parsed.questions,
-        questions: [],
-      };
-    }
-
     const course = await Course.findById(material.courseId);
     if (!course) {
       throw new ApiError(404, 'Course not found for material');
@@ -205,7 +190,7 @@ const generateQuestionsFromMaterial = async (
       createdBy: adminId,
       text: sanitizeQuestionText(q.text),
       options: q.options,
-      correctAnswer: q.correctAnswer,
+      ...(q.correctAnswer ? { correctAnswer: q.correctAnswer } : {}),
       difficulty: q.difficulty || 'medium',
       source: 'Human',
       accessLevel: 'free',
@@ -224,6 +209,8 @@ const generateQuestionsFromMaterial = async (
 
     return {
       mode: 'question_bank',
+      missingAnswers: parsed.missingAnswers,
+      extractedQuestions: parsed.questions,
       questions: created,
     };
   }
@@ -467,13 +454,6 @@ const importQuestionsFromMaterial = async (materialId, adminId, questions) => {
       throw new ApiError(400, 'No valid question bank detected in material content');
     }
 
-    if (parsed.missingAnswers > 0) {
-      throw new ApiError(400, 'Some detected questions are missing answers. Provide answers before importing.', {
-        missingAnswers: parsed.missingAnswers,
-        extractedQuestions: parsed.questions,
-      });
-    }
-
     questionsToImport = parsed.questions;
 
     if (material.content !== content) {
@@ -501,7 +481,7 @@ const importQuestionsFromMaterial = async (materialId, adminId, questions) => {
     createdBy: adminId,
     text: sanitizeQuestionText(q.text),
     options: q.options,
-    correctAnswer: q.correctAnswer,
+    ...(q.correctAnswer ? { correctAnswer: q.correctAnswer } : {}),
     difficulty: q.difficulty || 'medium',
     source: 'Human',
     accessLevel: 'free',

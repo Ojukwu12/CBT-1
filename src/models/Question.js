@@ -49,7 +49,9 @@ const questionSchema = new mongoose.Schema(
     correctAnswer: {
       type: String,
       enum: ['A', 'B', 'C', 'D'],
-      required: true,
+      required() {
+        return this.status === 'approved';
+      },
     },
     difficulty: {
       type: String,

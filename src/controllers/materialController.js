@@ -247,25 +247,13 @@ const generateQuestionsFromMaterial = [
       fresh
     );
 
-    if (result.missingAnswers) {
-      return res.status(400).json({
-        success: false,
-        data: {
-          materialId,
-          generationMode: getGenerationMode(result.mode),
-          missingAnswers: result.missingAnswers,
-          extractedQuestions: result.extractedQuestions,
-        },
-        message: 'Some extracted questions are missing answers. Please provide answers and re-import.',
-      });
-    }
-
     res.status(200).json({
       success: true,
       data: {
         log: result.log || null,
         mode: result.mode,
         generationMode: getGenerationMode(result.mode),
+        missingAnswers: result.missingAnswers || 0,
         questionsCount: result.questions.length,
         questionIds: result.questions.map((q) => q._id),
       },
