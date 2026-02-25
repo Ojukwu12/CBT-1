@@ -7,6 +7,11 @@ const Question = require('../models/Question');
 const Material = require('../models/Material');
 const User = require('../models/User');
 const AIGenerationLog = require('../models/AIGenerationLog');
+const Transaction = require('../models/Transaction');
+const PlanPricing = require('../models/PlanPricing');
+const PromoCode = require('../models/PromoCode');
+const StudyMaterial = require('../models/StudyMaterial');
+const ExamSession = require('../models/ExamSession');
 
 const ensureIndexes = async () => {
   try {
@@ -52,11 +57,40 @@ const ensureIndexes = async () => {
     await User.collection.createIndex({ lastSelectedCourseId: 1 });
     await User.collection.createIndex({ isActive: 1 });
     await User.collection.createIndex({ role: 1 });
+    await User.collection.createIndex({ refreshTokenHash: 1 }, { sparse: true });
 
     // AIGenerationLog indexes
     await AIGenerationLog.collection.createIndex({ universityId: 1 });
     await AIGenerationLog.collection.createIndex({ status: 1 });
     await AIGenerationLog.collection.createIndex({ createdAt: -1 });
+
+    // Transaction indexes - critical for payment verification and history
+    await Transaction.collection.createIndex({ paystackReference: 1 }, { unique: true });
+    await Transaction.collection.createIndex({ userId: 1, createdAt: -1 });
+    await Transaction.collection.createIndex({ userId: 1, status: 1, createdAt: -1 });
+    await Transaction.collection.createIndex({ status: 1, completedAt: -1 });
+    await Transaction.collection.createIndex({ plan: 1, status: 1, completedAt: -1 });
+    await Transaction.collection.createIndex({ promoCode: 1, status: 1, completedAt: -1 });
+
+    // Plan pricing indexes
+    await PlanPricing.collection.createIndex({ plan: 1 }, { unique: true });
+    await PlanPricing.collection.createIndex({ isActive: 1, plan: 1 });
+
+    // Promo code indexes
+    await PromoCode.collection.createIndex({ code: 1 }, { unique: true });
+    await PromoCode.collection.createIndex({ isActive: 1, validFrom: 1, validUntil: 1 });
+    await PromoCode.collection.createIndex({ createdAt: -1 });
+
+    // Study material indexes - critical for downloads/list endpoints
+    await StudyMaterial.collection.createIndex({ courseId: 1, isActive: 1, createdAt: -1 });
+    await StudyMaterial.collection.createIndex({ universityId: 1, departmentId: 1, isActive: 1 });
+    await StudyMaterial.collection.createIndex({ uploadedBy: 1, createdAt: -1 });
+
+    // Exam session indexes - critical for student exam history and status reads
+    await ExamSession.collection.createIndex({ userId: 1, createdAt: -1 });
+    await ExamSession.collection.createIndex({ userId: 1, status: 1, createdAt: -1 });
+    await ExamSession.collection.createIndex({ courseId: 1, createdAt: -1 });
+    await ExamSession.collection.createIndex({ status: 1, createdAt: -1 });
 
     console.log('✅ All database indexes created successfully');
   } catch (error) {

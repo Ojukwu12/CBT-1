@@ -9,7 +9,6 @@ const { env } = require('./config/env');
 const ApiError = require('./utils/ApiError');
 const errorHandler = require('./middleware/error.middleware');
 const requestIdMiddleware = require('./middleware/requestId.middleware');
-const { generalLimiter } = require('./middleware/rateLimit.middleware');
 const { generalTimeout, timeoutHandler } = require('./middleware/timeout.middleware');
 const scheduledTasksService = require('./services/scheduledTasksService');
 
@@ -66,7 +65,6 @@ app.use(compression());
 app.use(cookieParser());
 app.use(requestIdMiddleware);
 app.use(generalTimeout);  // Apply timeout to all requests (30s)
-app.use(generalLimiter);
 
 // Body parsers with size limits
 app.use(express.json({

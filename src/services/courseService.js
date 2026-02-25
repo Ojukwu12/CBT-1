@@ -1,5 +1,6 @@
 const Course = require('../models/Course');
 const ApiError = require('../utils/ApiError');
+const cacheService = require('./cacheService');
 
 const createCourse = async (departmentId, courseData) => {
   const existingCourse = await Course.findOne({
@@ -20,7 +21,9 @@ const createCourse = async (departmentId, courseData) => {
     universityId: courseData.universityId,
   });
 
-  return await course.save();
+  const createdCourse = await course.save();
+  await cacheService.delByPrefix('courses:');
+  return createdCourse;
 };
 
 const getCourseById = async (id) => {
@@ -37,12 +40,20 @@ const getCourseById = async (id) => {
 
 const getCoursesByDepartment = async (departmentId, filters = {}) => {
   const query = { departmentId, ...filters };
-  return await Course.find(query).select('-__v');
+  const cacheKey = `courses:department:${departmentId}:${JSON.stringify(filters)}`;
+  return cacheService.remember(
+    cacheKey,
+    async () => Course.find(query).select('-__v').lean(),
+    600
+  );
 };
 
 const getCoursesByUniversityAndLevel = async (universityId, level) => {
-  return await Course.find({ universityId, level, isActive: true }).select(
-    '-__v'
+  const cacheKey = `courses:university:${universityId}:level:${level}`;
+  return cacheService.remember(
+    cacheKey,
+    async () => Course.find({ universityId, level, isActive: true }).select('-__v').lean(),
+    600
   );
 };
 
@@ -55,6 +66,8 @@ const updateCourse = async (id, updateData) => {
   if (!course) {
     throw new ApiError(404, 'Course not found');
   }
+
+  await cacheService.delByPrefix('courses:');
 
   return course;
 };

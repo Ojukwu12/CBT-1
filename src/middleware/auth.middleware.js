@@ -24,7 +24,11 @@ const verifyToken = (req, res, next) => {
       return next(new ApiError(401, 'No token provided'));
     }
 
-    const decoded = jwt.verify(token, env.JWT_SECRET);
+    const decoded = jwt.verify(token, env.JWT_SECRET, {
+      issuer: env.JWT_ISSUER,
+      audience: env.JWT_AUDIENCE,
+      algorithms: ['HS256'],
+    });
     const normalizedUserId = decoded?.id || decoded?._id || decoded?.userId;
 
     if (!normalizedUserId) {
@@ -51,10 +55,15 @@ const verifyToken = (req, res, next) => {
 /**
  * Generate JWT token
  * @param {Object} payload - User data to encode
- * @param {String} expiresIn - Token expiry (default: 7d)
+ * @param {String} expiresIn - Token expiry (default: env.JWT_ACCESS_TOKEN_TTL or 15m)
  */
-const generateToken = (payload, expiresIn = '7d') => {
-  return jwt.sign(payload, env.JWT_SECRET, { expiresIn });
+const generateToken = (payload, expiresIn = env.JWT_ACCESS_TOKEN_TTL || '15m') => {
+  return jwt.sign(payload, env.JWT_SECRET, {
+    expiresIn,
+    issuer: env.JWT_ISSUER,
+    audience: env.JWT_AUDIENCE,
+    algorithm: 'HS256',
+  });
 };
 
 module.exports = {

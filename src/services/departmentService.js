@@ -1,5 +1,6 @@
 const Department = require('../models/Department');
 const ApiError = require('../utils/ApiError');
+const cacheService = require('./cacheService');
 
 const createDepartment = async (universityId, departmentData) => {
   const existingDepartment = await Department.findOne({
@@ -19,7 +20,9 @@ const createDepartment = async (universityId, departmentData) => {
     universityId,
   });
 
-  return await department.save();
+  const createdDepartment = await department.save();
+  await cacheService.delByPrefix('departments:');
+  return createdDepartment;
 };
 
 const getDepartmentById = async (id) => {
@@ -35,7 +38,12 @@ const getDepartmentById = async (id) => {
 
 const getDepartmentsByUniversity = async (universityId, filters = {}) => {
   const query = { universityId, ...filters };
-  return await Department.find(query).select('-__v');
+  const cacheKey = `departments:university:${universityId}:${JSON.stringify(filters)}`;
+  return cacheService.remember(
+    cacheKey,
+    async () => Department.find(query).select('-__v').lean(),
+    900
+  );
 };
 
 const updateDepartment = async (id, updateData) => {
@@ -47,6 +55,8 @@ const updateDepartment = async (id, updateData) => {
   if (!department) {
     throw new ApiError(404, 'Department not found');
   }
+
+  await cacheService.delByPrefix('departments:');
 
   return department;
 };

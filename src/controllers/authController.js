@@ -8,6 +8,7 @@ const Logger = require('../utils/logger');
 const asyncHandler = require('../utils/asyncHandler');
 const emailService = require('../services/emailService');
 const { env } = require('../config/env');
+const { v4: uuidv4 } = require('uuid');
 
 const logger = new Logger('AuthController');
 
@@ -20,8 +21,13 @@ const getRefreshCookieOptions = () => ({
 
 const hashValue = (value) => crypto.createHash('sha256').update(value).digest('hex');
 
-const generateRefreshToken = (payload, expiresIn = '30d') => {
-  return require('jsonwebtoken').sign(payload, env.REFRESH_TOKEN_SECRET, { expiresIn });
+const generateRefreshToken = (payload, expiresIn = env.JWT_REFRESH_TOKEN_TTL || '30d') => {
+  return require('jsonwebtoken').sign(payload, env.REFRESH_TOKEN_SECRET, {
+    expiresIn,
+    issuer: env.JWT_ISSUER,
+    audience: env.JWT_AUDIENCE,
+    algorithm: 'HS256',
+  });
 };
 
 /**
@@ -88,6 +94,8 @@ const register = asyncHandler(async (req, res, next) => {
     email: user.email,
     role: user.role,
     plan: user.plan,
+    type: 'access',
+    jti: uuidv4(),
   });
 
   logger.info(`User registered: ${email} - Verification email sent: ${emailSent}`);
@@ -104,7 +112,7 @@ const register = asyncHandler(async (req, res, next) => {
         emailVerifiedAt: user.emailVerifiedAt,
       },
       token,
-      expiresIn: '7 days',
+      expiresIn: env.JWT_ACCESS_TOKEN_TTL,
       verificationEmailSent: emailSent,
     }, emailSent ? 'User registered successfully. Verification email sent.' : 'User registered successfully. Please check spam folder or resend verification email.')
   );
@@ -147,12 +155,16 @@ const login = asyncHandler(async (req, res, next) => {
     email: user.email,
     role: user.role,
     plan: user.plan,
+    type: 'access',
+    jti: uuidv4(),
   });
 
   const refreshToken = generateRefreshToken({
     id: user._id,
     email: user.email,
     role: user.role,
+    type: 'refresh',
+    jti: uuidv4(),
   });
 
   user.refreshTokenHash = hashValue(refreshToken);
@@ -175,7 +187,7 @@ const login = asyncHandler(async (req, res, next) => {
         emailVerifiedAt: user.emailVerifiedAt,
       },
       token,
-      expiresIn: '7 days',
+      expiresIn: env.JWT_ACCESS_TOKEN_TTL,
     }, 'Login successful')
   );
 });
@@ -329,9 +341,17 @@ const refreshToken = asyncHandler(async (req, res, next) => {
 
   let decoded;
   try {
-    decoded = require('jsonwebtoken').verify(token, env.REFRESH_TOKEN_SECRET);
+    decoded = require('jsonwebtoken').verify(token, env.REFRESH_TOKEN_SECRET, {
+      issuer: env.JWT_ISSUER,
+      audience: env.JWT_AUDIENCE,
+      algorithms: ['HS256'],
+    });
   } catch (err) {
     return next(new ApiError(401, 'Invalid refresh token'));
+  }
+
+  if (decoded.type !== 'refresh') {
+    return next(new ApiError(401, 'Invalid refresh token type'));
   }
 
   const user = await User.findById(decoded.id).select('+refreshTokenHash');
@@ -340,6 +360,8 @@ const refreshToken = asyncHandler(async (req, res, next) => {
   }
 
   if (hashValue(token) !== user.refreshTokenHash) {
+    user.refreshTokenHash = undefined;
+    await user.save();
     return next(new ApiError(401, 'Refresh token invalid'));
   }
 
@@ -348,12 +370,16 @@ const refreshToken = asyncHandler(async (req, res, next) => {
     email: user.email,
     role: user.role,
     plan: user.plan,
+    type: 'access',
+    jti: uuidv4(),
   });
 
   const newRefreshToken = generateRefreshToken({
     id: user._id,
     email: user.email,
     role: user.role,
+    type: 'refresh',
+    jti: uuidv4(),
   });
 
   user.refreshTokenHash = hashValue(newRefreshToken);
@@ -362,7 +388,7 @@ const refreshToken = asyncHandler(async (req, res, next) => {
   res.cookie('refreshToken', newRefreshToken, getRefreshCookieOptions());
 
   res.status(200).json(
-    new ApiResponse(200, { token: newAccessToken, expiresIn: '7 days' }, 'Token refreshed')
+    new ApiResponse(200, { token: newAccessToken, expiresIn: env.JWT_ACCESS_TOKEN_TTL }, 'Token refreshed')
   );
 });
 
@@ -374,7 +400,14 @@ const logout = asyncHandler(async (req, res, next) => {
   const token = req.cookies?.refreshToken;
   if (token) {
     try {
-      const decoded = require('jsonwebtoken').verify(token, env.REFRESH_TOKEN_SECRET);
+      const decoded = require('jsonwebtoken').verify(token, env.REFRESH_TOKEN_SECRET, {
+        issuer: env.JWT_ISSUER,
+        audience: env.JWT_AUDIENCE,
+        algorithms: ['HS256'],
+      });
+      if (decoded.type !== 'refresh') {
+        throw new Error('Invalid token type');
+      }
       const user = await User.findById(decoded.id).select('+refreshTokenHash');
       if (user) {
         user.refreshTokenHash = undefined;

@@ -8,6 +8,7 @@ const router = express.Router();
 const paymentController = require('../controllers/paymentController');
 const { verifyToken } = require('../middleware/auth.middleware');
 const { paymentInitializeLimiter, paymentVerifyLimiter, webhookLimiter } = require('../middleware/rateLimit.middleware');
+const { validatePaystackIP } = require('../middleware/webhook.middleware');
 const validate = require('../middleware/validate.middleware');
 const {
   initializePaymentSchema,
@@ -104,6 +105,7 @@ router.post(
  */
 router.post(
   '/webhook',
+  validatePaystackIP,
   webhookLimiter,
   paymentController.handleWebhook
 );

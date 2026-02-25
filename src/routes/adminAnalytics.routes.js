@@ -6,6 +6,7 @@ const { verifyToken } = require('../middleware/auth.middleware');
 const validate = require('../middleware/validate.middleware');
 const ApiError = require('../utils/ApiError');
 const Joi = require('joi');
+const { adminReadLimiter, adminWriteLimiter } = require('../middleware/rateLimit.middleware');
 
 // Admin role verification middleware
 const isAdmin = (req, res, next) => {
@@ -52,19 +53,19 @@ const sendPlanExpiryReminderSchema = Joi.object({
 });
 
 // Analytics Routes
-router.get('/overview', verifyToken, isAdmin, AdminAnalyticsController.getOverviewStats);
-router.get('/users', verifyToken, isAdmin, AdminAnalyticsController.getUserMetrics);
-router.get('/questions', verifyToken, isAdmin, AdminAnalyticsController.getQuestionPerformance);
-router.get('/exams', verifyToken, isAdmin, AdminAnalyticsController.getExamStatistics);
-router.get('/revenue', verifyToken, isAdmin, AdminAnalyticsController.getRevenueData);
-router.get('/university/:universityId', verifyToken, isAdmin, validate(universityParamsSchema), AdminAnalyticsController.getUniversityStats);
-router.get('/export', verifyToken, isAdmin, validate(exportQuerySchema), AdminAnalyticsController.exportData);
-router.get('/report/:type', verifyToken, isAdmin, validate(reportParamsSchema), AdminAnalyticsController.generateReport);
+router.get('/overview', verifyToken, isAdmin, adminReadLimiter, AdminAnalyticsController.getOverviewStats);
+router.get('/users', verifyToken, isAdmin, adminReadLimiter, AdminAnalyticsController.getUserMetrics);
+router.get('/questions', verifyToken, isAdmin, adminReadLimiter, AdminAnalyticsController.getQuestionPerformance);
+router.get('/exams', verifyToken, isAdmin, adminReadLimiter, AdminAnalyticsController.getExamStatistics);
+router.get('/revenue', verifyToken, isAdmin, adminReadLimiter, AdminAnalyticsController.getRevenueData);
+router.get('/university/:universityId', verifyToken, isAdmin, adminReadLimiter, validate(universityParamsSchema), AdminAnalyticsController.getUniversityStats);
+router.get('/export', verifyToken, isAdmin, adminReadLimiter, validate(exportQuerySchema), AdminAnalyticsController.exportData);
+router.get('/report/:type', verifyToken, isAdmin, adminReadLimiter, validate(reportParamsSchema), AdminAnalyticsController.generateReport);
 
 // Notification Routes
-router.post('/notifications/send-bulk', verifyToken, isAdmin, validate(sendBulkEmailSchema), AdminNotificationController.sendBulkEmail);
-router.post('/notifications/announcement', verifyToken, isAdmin, validate(sendAnnouncementSchema), AdminNotificationController.sendAnnouncement);
-router.post('/notifications/maintenance', verifyToken, isAdmin, validate(sendMaintenanceSchema), AdminNotificationController.sendMaintenanceNotification);
-router.post('/notifications/plan-expiry-reminder', verifyToken, isAdmin, validate(sendPlanExpiryReminderSchema), AdminNotificationController.sendPlanExpiryReminder);
+router.post('/notifications/send-bulk', verifyToken, isAdmin, adminWriteLimiter, validate(sendBulkEmailSchema), AdminNotificationController.sendBulkEmail);
+router.post('/notifications/announcement', verifyToken, isAdmin, adminWriteLimiter, validate(sendAnnouncementSchema), AdminNotificationController.sendAnnouncement);
+router.post('/notifications/maintenance', verifyToken, isAdmin, adminWriteLimiter, validate(sendMaintenanceSchema), AdminNotificationController.sendMaintenanceNotification);
+router.post('/notifications/plan-expiry-reminder', verifyToken, isAdmin, adminWriteLimiter, validate(sendPlanExpiryReminderSchema), AdminNotificationController.sendPlanExpiryReminder);
 
 module.exports = router;

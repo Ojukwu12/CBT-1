@@ -4,6 +4,7 @@ const { verifyToken } = require('../middleware/auth.middleware');
 const validate = require('../middleware/validate.middleware');
 const ApiError = require('../utils/ApiError');
 const Joi = require('joi');
+const { adminReadLimiter, adminWriteLimiter } = require('../middleware/rateLimit.middleware');
 
 const router = express.Router();
 
@@ -50,17 +51,17 @@ const updatePromoSchema = Joi.object({
 router.use(verifyToken, isAdmin);
 
 // Pricing management
-router.get('/pricing', adminPricingController.getPlanPricing);
-router.put('/pricing/:plan', validate(updatePricingSchema), adminPricingController.updatePlanPricing);
-router.delete('/pricing/:plan', adminPricingController.deletePlanPricing);
-router.get('/pricing/:plan/history', adminPricingController.getPricingHistory);
-router.get('/pricing/analytics', adminPricingController.getPricingAnalytics);
+router.get('/pricing', adminReadLimiter, adminPricingController.getPlanPricing);
+router.put('/pricing/:plan', adminWriteLimiter, validate(updatePricingSchema), adminPricingController.updatePlanPricing);
+router.delete('/pricing/:plan', adminWriteLimiter, adminPricingController.deletePlanPricing);
+router.get('/pricing/:plan/history', adminReadLimiter, adminPricingController.getPricingHistory);
+router.get('/pricing/analytics', adminReadLimiter, adminPricingController.getPricingAnalytics);
 
 // Promo code management
-router.post('/promo-codes', validate(createPromoSchema), adminPricingController.createPromoCode);
-router.get('/promo-codes', adminPricingController.listPromoCodes);
-router.put('/promo-codes/:code', validate(updatePromoSchema), adminPricingController.updatePromoCode);
-router.delete('/promo-codes/:code', adminPricingController.deletePromoCode);
-router.get('/promo-codes/:code/stats', adminPricingController.getPromoCodeStats);
+router.post('/promo-codes', adminWriteLimiter, validate(createPromoSchema), adminPricingController.createPromoCode);
+router.get('/promo-codes', adminReadLimiter, adminPricingController.listPromoCodes);
+router.put('/promo-codes/:code', adminWriteLimiter, validate(updatePromoSchema), adminPricingController.updatePromoCode);
+router.delete('/promo-codes/:code', adminWriteLimiter, adminPricingController.deletePromoCode);
+router.get('/promo-codes/:code/stats', adminReadLimiter, adminPricingController.getPromoCodeStats);
 
 module.exports = router;

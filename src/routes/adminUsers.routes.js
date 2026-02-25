@@ -5,6 +5,7 @@ const { verifyToken } = require('../middleware/auth.middleware');
 const validate = require('../middleware/validate.middleware');
 const ApiError = require('../utils/ApiError');
 const Joi = require('joi');
+const { adminReadLimiter, adminWriteLimiter } = require('../middleware/rateLimit.middleware');
 
 // Admin role verification middleware
 const isAdmin = (req, res, next) => {
@@ -54,20 +55,20 @@ const sendNotificationSchema = Joi.object({
 
 // Routes
 // Get current admin user's profile
-router.get('/me', verifyToken, isAdmin, AdminUserController.getMe);
-router.get('/', verifyToken, isAdmin, validate(getAllUsersSchema, 'query'), AdminUserController.getAllUsers);
-router.get('/:userId', verifyToken, isAdmin, validate(userIdSchema, 'params'), AdminUserController.getUser);
-router.get('/:userId/plan-history', verifyToken, isAdmin, validate(userIdSchema, 'params'), AdminUserController.getPlanHistory);
+router.get('/me', verifyToken, isAdmin, adminReadLimiter, AdminUserController.getMe);
+router.get('/', verifyToken, isAdmin, adminReadLimiter, validate(getAllUsersSchema, 'query'), AdminUserController.getAllUsers);
+router.get('/:userId', verifyToken, isAdmin, adminReadLimiter, validate(userIdSchema, 'params'), AdminUserController.getUser);
+router.get('/:userId/plan-history', verifyToken, isAdmin, adminReadLimiter, validate(userIdSchema, 'params'), AdminUserController.getPlanHistory);
 
-router.post('/:userId/ban', verifyToken, isAdmin, validate(userIdSchema, 'params'), validate(banUserSchema), AdminUserController.banUser);
-router.post('/:userId/unban', verifyToken, isAdmin, validate(userIdSchema, 'params'), AdminUserController.unbanUser);
+router.post('/:userId/ban', verifyToken, isAdmin, adminWriteLimiter, validate(userIdSchema, 'params'), validate(banUserSchema), AdminUserController.banUser);
+router.post('/:userId/unban', verifyToken, isAdmin, adminWriteLimiter, validate(userIdSchema, 'params'), AdminUserController.unbanUser);
 
-router.post('/:userId/role', verifyToken, isAdmin, validate(userIdSchema, 'params'), validate(roleChangeSchema), AdminUserController.changeUserRole);
+router.post('/:userId/role', verifyToken, isAdmin, adminWriteLimiter, validate(userIdSchema, 'params'), validate(roleChangeSchema), AdminUserController.changeUserRole);
 // Unified plan change endpoint - admin selects any available plan
-router.post('/:userId/change-plan', verifyToken, isAdmin, validate(userIdSchema, 'params'), validate(changePlanSchema), AdminUserController.changePlan);
+router.post('/:userId/change-plan', verifyToken, isAdmin, adminWriteLimiter, validate(userIdSchema, 'params'), validate(changePlanSchema), AdminUserController.changePlan);
 // Legacy endpoint for backward compatibility
-router.post('/:userId/downgrade-plan', verifyToken, isAdmin, validate(userIdSchema, 'params'), validate(downgradePlanSchema), AdminUserController.downgradePlan);
+router.post('/:userId/downgrade-plan', verifyToken, isAdmin, adminWriteLimiter, validate(userIdSchema, 'params'), validate(downgradePlanSchema), AdminUserController.downgradePlan);
 
-router.post('/:userId/send-notification', verifyToken, isAdmin, validate(userIdSchema, 'params'), validate(sendNotificationSchema), AdminUserController.sendNotificationToUser);
+router.post('/:userId/send-notification', verifyToken, isAdmin, adminWriteLimiter, validate(userIdSchema, 'params'), validate(sendNotificationSchema), AdminUserController.sendNotificationToUser);
 
 module.exports = router;

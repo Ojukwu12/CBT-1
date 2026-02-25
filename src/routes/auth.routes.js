@@ -2,6 +2,7 @@ const express = require('express');
 const authController = require('../controllers/authController');
 const validate = require('../middleware/validate.middleware');
 const { verifyToken } = require('../middleware/auth.middleware');
+const { authLimiter, authRefreshLimiter } = require('../middleware/rateLimit.middleware');
 const { registerSchema, loginSchema, forgotPasswordSchema, resetPasswordSchema, resetPasswordTokenQuerySchema, verifyEmailQuerySchema, resendVerificationEmailSchema, refreshTokenSchema, logoutSchema } = require('../validators/auth.validator');
 
 const router = express.Router();
@@ -17,6 +18,7 @@ const router = express.Router();
  */
 router.post(
   '/register',
+  authLimiter,
   validate(registerSchema),
   authController.register
 );
@@ -28,6 +30,7 @@ router.post(
  */
 router.post(
   '/login',
+  authLimiter,
   validate(loginSchema),
   authController.login
 );
@@ -39,6 +42,7 @@ router.post(
  */
 router.post(
   '/forgot-password',
+  authLimiter,
   validate(forgotPasswordSchema),
   authController.forgotPassword
 );
@@ -50,6 +54,7 @@ router.post(
  */
 router.post(
   '/reset-password',
+  authLimiter,
   validate(resetPasswordSchema),
   authController.resetPassword
 );
@@ -81,6 +86,7 @@ router.get(
  */
 router.post(
   '/resend-verification-email',
+  authLimiter,
   validate(resendVerificationEmailSchema),
   authController.resendVerificationEmail
 );
@@ -91,6 +97,7 @@ router.post(
  */
 router.post(
   '/refresh',
+  authRefreshLimiter,
   validate(refreshTokenSchema),
   authController.refreshToken
 );
@@ -101,6 +108,7 @@ router.post(
  */
 router.post(
   '/logout',
+  authRefreshLimiter,
   validate(logoutSchema),
   authController.logout
 );

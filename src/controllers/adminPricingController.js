@@ -4,6 +4,7 @@ const Transaction = require('../models/Transaction');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const Logger = require('../utils/logger');
+const cacheService = require('../services/cacheService');
 
 const logger = new Logger('AdminPricingController');
 
@@ -60,6 +61,7 @@ const updatePlanPricing = asyncHandler(async (req, res) => {
   }
 
   await pricing.save();
+  await cacheService.delByPrefix('payments:plans:');
 
   logger.info(`Plan pricing updated for ${plan} by admin ${req.user.id}: ₦${price}`);
 
@@ -92,6 +94,7 @@ const deletePlanPricing = asyncHandler(async (req, res) => {
   pricing.isActive = false;
   pricing.updatedBy = req.user.id;
   await pricing.save();
+  await cacheService.delByPrefix('payments:plans:');
 
   logger.info(`Plan pricing deleted for ${plan} by admin ${req.user.id}`);
 

@@ -1,5 +1,6 @@
 const Topic = require('../models/Topic');
 const ApiError = require('../utils/ApiError');
+const cacheService = require('./cacheService');
 
 const createTopic = async (courseId, topicData) => {
   const existingTopic = await Topic.findOne({
@@ -17,7 +18,9 @@ const createTopic = async (courseId, topicData) => {
     universityId: topicData.universityId,
   });
 
-  return await topic.save();
+  const createdTopic = await topic.save();
+  await cacheService.delByPrefix('topics:');
+  return createdTopic;
 };
 
 const getTopicById = async (id) => {
@@ -34,7 +37,12 @@ const getTopicById = async (id) => {
 
 const getTopicsByCourse = async (courseId, filters = {}) => {
   const query = { courseId, ...filters };
-  return await Topic.find(query).select('-__v');
+  const cacheKey = `topics:course:${courseId}:${JSON.stringify(filters)}`;
+  return cacheService.remember(
+    cacheKey,
+    async () => Topic.find(query).select('-__v').lean(),
+    600
+  );
 };
 
 const updateTopic = async (id, updateData) => {
@@ -46,6 +54,8 @@ const updateTopic = async (id, updateData) => {
   if (!topic) {
     throw new ApiError(404, 'Topic not found');
   }
+
+  await cacheService.delByPrefix('topics:');
 
   return topic;
 };

@@ -15,6 +15,7 @@ const User = require('../models/User');
 const Transaction = require('../models/Transaction');
 const PromoCode = require('../models/PromoCode');
 const PlanPricing = require('../models/PlanPricing');
+const cacheService = require('../services/cacheService');
 
 const logger = new Logger('PaymentController');
 
@@ -188,6 +189,27 @@ const verifyPayment = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'Payment verification failed');
   }
 
+  if (paymentResult.email?.toLowerCase() !== existingTransaction.email?.toLowerCase()) {
+    logger.error(`Payment verification email mismatch for reference ${reference}`);
+    throw new ApiError(400, 'Payment verification data mismatch');
+  }
+
+  if (Number(paymentResult.amount) !== Number(existingTransaction.amount)) {
+    logger.error(`Payment verification amount mismatch for reference ${reference}`);
+    throw new ApiError(400, 'Payment verification amount mismatch');
+  }
+
+  if (paymentResult.plan !== existingTransaction.plan) {
+    logger.error(`Payment verification plan mismatch for reference ${reference}`);
+    throw new ApiError(400, 'Payment verification plan mismatch');
+  }
+
+  const pricing = await paystackService.getPlanPricing();
+  const verifiedPlanConfig = pricing[existingTransaction.plan];
+  if (!verifiedPlanConfig || !verifiedPlanConfig.duration) {
+    throw new ApiError(500, 'Plan configuration missing for payment verification');
+  }
+
   // Get user (explicitly exclude password for security)
   const user = await User.findById(userId).select('-password');
 
@@ -197,7 +219,7 @@ const verifyPayment = asyncHandler(async (req, res) => {
 
   // Calculate expiry date
   const expiryDate = new Date();
-  expiryDate.setDate(expiryDate.getDate() + paymentResult.planExpiryDays);
+  expiryDate.setDate(expiryDate.getDate() + verifiedPlanConfig.duration);
 
   // Update user plan atomically
   const oldPlan = user.plan;
@@ -205,7 +227,7 @@ const verifyPayment = asyncHandler(async (req, res) => {
     userId,
     {
       $set: {
-        plan: paymentResult.plan,
+        plan: existingTransaction.plan,
         planExpiresAt: expiryDate
       }
     },
@@ -216,7 +238,7 @@ const verifyPayment = asyncHandler(async (req, res) => {
   const transaction = await Transaction.findOneAndUpdate(
     { 
       paystackReference: reference,
-      status: { $in: ['pending', 'initiated'] } // Only update if not already processed
+      status: 'pending' // Only update if not already processed
     },
     {
       $set: {
@@ -264,8 +286,8 @@ const verifyPayment = asyncHandler(async (req, res) => {
   try {
     await emailService.sendPaymentReceiptEmail(user, transaction);
 
-    if (oldPlan !== paymentResult.plan) {
-      await emailService.sendPlanUpgradeEmail(user, oldPlan, paymentResult.plan, expiryDate);
+    if (oldPlan !== existingTransaction.plan) {
+      await emailService.sendPlanUpgradeEmail(user, oldPlan, existingTransaction.plan, expiryDate);
     }
   } catch (err) {
     // Log email error but don't fail payment verification
@@ -283,15 +305,15 @@ const verifyPayment = asyncHandler(async (req, res) => {
   );
 
   // Log plan upgrade
-  if (oldPlan !== paymentResult.plan) {
-    await auditLogService.logPlanUpgrade(userId, oldPlan, paymentResult.plan, transaction._id);
+  if (oldPlan !== existingTransaction.plan) {
+    await auditLogService.logPlanUpgrade(userId, oldPlan, existingTransaction.plan, transaction._id);
   }
 
   res.status(200).json(
     new ApiResponse(200, {
       transactionId: transaction._id,
-      plan: user.plan,
-      planExpiresAt: user.planExpiresAt,
+      plan: existingTransaction.plan,
+      planExpiresAt: expiryDate,
       message: 'Plan upgraded successfully!',
     }, 'Payment verified and plan updated')
   );
@@ -302,8 +324,11 @@ const verifyPayment = asyncHandler(async (req, res) => {
  * GET /api/payments/plans
  */
 const getPlans = asyncHandler(async (req, res) => {
-  // Get plans from database
-  const pricingRecords = await PlanPricing.find({ isActive: true }).sort({ plan: 1 });
+  const pricingRecords = await cacheService.remember(
+    'payments:plans:active',
+    async () => PlanPricing.find({ isActive: true }).sort({ plan: 1 }).lean(),
+    900
+  );
   
   // If no plans in database, return error instead of fallback
   if (pricingRecords.length === 0) {
@@ -431,7 +456,12 @@ const handleWebhook = asyncHandler(async (req, res) => {
     // This allows for testing and flexibility
   }
 
-  const { event, data } = req.body;
+  const { event, data } = req.body || {};
+
+  if (!event || !data) {
+    logger.warn(`Webhook rejected: malformed payload from IP ${clientIP}`);
+    throw new ApiError(400, 'Invalid webhook payload');
+  }
 
   // Log webhook receipt
   paystackService.logWebhookEvent(event, data, 'received');
@@ -444,7 +474,11 @@ const handleWebhook = asyncHandler(async (req, res) => {
     );
   }
 
-  const { reference, status, customer, amount, metadata } = data;
+  const { reference, status, customer, amount } = data;
+
+  if (!reference) {
+    throw new ApiError(400, 'Missing transaction reference');
+  }
 
   logger.info(`Processing webhook for payment: ${reference}`);
 
@@ -480,29 +514,47 @@ const handleWebhook = asyncHandler(async (req, res) => {
     );
   }
 
-  // Extract and validate metadata
-  const { userId, plan, duration } = metadata;
-  const validPlans = ['free', 'basic', 'premium'];
-
-  if (!userId || !plan || !duration) {
-    logger.error(`Invalid metadata in webhook: ${reference}`, { metadata });
-    paystackService.logWebhookEvent(event, data, 'invalid_metadata');
-    throw new ApiError(400, 'Invalid webhook metadata');
+  if (!transaction) {
+    logger.warn(`Webhook ignored: unknown reference ${reference}`);
+    paystackService.logWebhookEvent(event, data, 'unknown_reference');
+    return res.status(200).json(
+      new ApiResponse(200, { status: 'ignored_unknown_reference' }, 'Webhook acknowledged')
+    );
   }
 
-  // Validate plan is one of the allowed values
-  if (!validPlans.includes(plan)) {
-    logger.error(`Invalid plan in webhook: ${reference} - plan: ${plan}`, { metadata });
-    paystackService.logWebhookEvent(event, data, 'invalid_plan');
-    throw new ApiError(400, 'Invalid plan value');
+  if (transaction.status !== 'pending') {
+    logger.warn(`Webhook ignored: invalid transaction state ${transaction.status} for ${reference}`);
+    return res.status(200).json(
+      new ApiResponse(200, { status: 'ignored_invalid_state' }, 'Webhook acknowledged')
+    );
   }
 
-  // Validate duration is a positive number
-  if (typeof duration !== 'number' || duration <= 0 || duration > 365) {
-    logger.error(`Invalid duration in webhook: ${reference} - duration: ${duration}`, { metadata });
-    paystackService.logWebhookEvent(event, data, 'invalid_duration');
-    throw new ApiError(400, 'Invalid duration (must be 1-365 days)');
+  const amountInNaira = Math.round(Number(amount) || 0) / 100;
+  if (!Number.isFinite(amountInNaira) || amountInNaira <= 0) {
+    throw new ApiError(400, 'Invalid webhook amount');
   }
+
+  if (Number(transaction.amount) !== amountInNaira) {
+    logger.error(`Webhook amount mismatch for reference ${reference}: expected ${transaction.amount}, got ${amountInNaira}`);
+    paystackService.logWebhookEvent(event, data, 'amount_mismatch');
+    throw new ApiError(400, 'Payment amount mismatch');
+  }
+
+  if (customer?.email && transaction.email?.toLowerCase() !== customer.email.toLowerCase()) {
+    logger.error(`Webhook email mismatch for reference ${reference}`);
+    paystackService.logWebhookEvent(event, data, 'email_mismatch');
+    throw new ApiError(400, 'Payment customer mismatch');
+  }
+
+  const pricing = await paystackService.getPlanPricing();
+  const transactionPlanConfig = pricing[transaction.plan];
+  if (!transactionPlanConfig || !transactionPlanConfig.duration) {
+    throw new ApiError(500, 'Plan configuration missing');
+  }
+
+  const userId = transaction.userId;
+  const plan = transaction.plan;
+  const duration = transactionPlanConfig.duration;
 
   // Get user
   const user = await User.findById(userId).select('-password');
@@ -531,44 +583,27 @@ const handleWebhook = asyncHandler(async (req, res) => {
     { new: true }
   );
 
-  // Update or create transaction atomically
+  transaction = await Transaction.findOneAndUpdate(
+    { _id: transaction._id, status: 'pending' },
+    {
+      $set: {
+        status: 'success',
+        completedAt: new Date(),
+        verifiedAt: new Date(),
+        planExpiryDate: expiryDate,
+        paystackCustomerId: customer?.customer_code,
+        authorizationCode: data.authorization?.authorization_code,
+        last4Digits: data.authorization?.last4,
+        cardBrand: data.authorization?.brand,
+      }
+    },
+    { new: true }
+  );
+
   if (!transaction) {
-    // Create new transaction record (webhook came before client verify)
-    transaction = new Transaction({
-      userId,
-      universityId: null,
-      email: customer.email,
-      plan,
-      amount: Math.round(amount) / 100, // Convert Kobo to Naira (integer math)
-      paystackReference: reference,
-      status: 'success',
-      initiatedAt: new Date(),
-      completedAt: new Date(),
-      verifiedAt: new Date(),
-      planExpiryDate: expiryDate,
-      paystackCustomerId: customer.customer_code,
-      authorizationCode: data.authorization?.authorization_code,
-      last4Digits: data.authorization?.last4,
-      cardBrand: data.authorization?.brand,
-    });
-    await transaction.save();
-  } else {
-    // Update existing transaction
-    transaction = await Transaction.findByIdAndUpdate(
-      transaction._id,
-      {
-        $set: {
-          status: 'success',
-          completedAt: new Date(),
-          verifiedAt: new Date(),
-          planExpiryDate: expiryDate,
-          paystackCustomerId: customer.customer_code,
-          authorizationCode: data.authorization?.authorization_code,
-          last4Digits: data.authorization?.last4,
-          cardBrand: data.authorization?.brand,
-        }
-      },
-      { new: true }
+    logger.info(`Webhook already processed concurrently: ${reference}`);
+    return res.status(200).json(
+      new ApiResponse(200, { status: 'already_processed' }, 'Payment already processed')
     );
   }
 

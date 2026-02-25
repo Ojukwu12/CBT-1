@@ -2,6 +2,7 @@ const { env, validateEnv } = require('./config/env');
 const { connectDatabase } = require('./config/database');
 const { ensureIndexes } = require('./config/indexes');
 const app = require('./app');
+const cacheService = require('./services/cacheService');
 
 // Global error handlers to prevent crashes
 process.on('uncaughtException', (error) => {
@@ -30,6 +31,14 @@ const startServer = async () => {
 
     // Create database indexes for optimal query performance
     await ensureIndexes();
+
+    // Warm up cache layer and report mode
+    const redisClient = await cacheService.getRedisClient();
+    if (redisClient) {
+      console.log('🧠 Cache mode: Redis connected');
+    } else {
+      console.log('🧠 Cache mode: In-memory fallback');
+    }
 
     // Start Express server
     const server = app.listen(env.PORT, () => {

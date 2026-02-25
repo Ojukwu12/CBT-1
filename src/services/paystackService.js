@@ -298,13 +298,25 @@ class PaystackService {
   verifyWebhookSignature(body, signature, rawBody = null) {
     try {
       const crypto = require('crypto');
+      if (!this.secretKey || !signature) {
+        return false;
+      }
+
       const payload = rawBody ? rawBody : Buffer.from(JSON.stringify(body));
       const hash = crypto
         .createHmac('sha512', this.secretKey)
         .update(payload)
         .digest('hex');
-      
-      const isValid = hash === signature;
+
+      const expected = Buffer.from(hash, 'hex');
+      const received = Buffer.from(String(signature).trim(), 'hex');
+
+      if (expected.length !== received.length) {
+        logger.warn('Invalid webhook signature length detected');
+        return false;
+      }
+
+      const isValid = crypto.timingSafeEqual(expected, received);
       if (!isValid) {
         logger.warn('Invalid webhook signature detected');
       }
