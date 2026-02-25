@@ -1,4 +1,5 @@
 const StudyMaterial = require('../models/StudyMaterial');
+const mongoose = require('mongoose');
 const courseService = require('../services/courseService');
 const asyncHandler = require('../utils/asyncHandler');
 const validate = require('../middleware/validate.middleware');
@@ -68,6 +69,12 @@ const buildDownloadFilename = (material) => {
     .replace(/\s+/g, '-') || 'study-material';
 
   return `${baseTitle}${ext}`;
+};
+
+const ensureValidMaterialId = (materialId) => {
+  if (!materialId || materialId === 'undefined' || !mongoose.Types.ObjectId.isValid(materialId)) {
+    throw new ApiError(400, 'Invalid study material id');
+  }
 };
 
 const getDownloadLimitStatusForUser = async (userId) => {
@@ -218,6 +225,8 @@ const listStudyMaterials = [
 const getStudyMaterial = asyncHandler(async (req, res) => {
   const { materialId } = req.params;
 
+  ensureValidMaterialId(materialId);
+
   const material = await StudyMaterial.findById(materialId);
   if (!material) {
     throw new ApiError(404, 'Study material not found');
@@ -232,8 +241,71 @@ const getStudyMaterial = asyncHandler(async (req, res) => {
   });
 });
 
+const previewStudyMaterial = asyncHandler(async (req, res) => {
+  const { materialId } = req.params;
+
+  ensureValidMaterialId(materialId);
+
+  const material = await StudyMaterial.findById(materialId);
+  if (!material) {
+    throw new ApiError(404, 'Study material not found');
+  }
+
+  if (!material.isActive) {
+    throw new ApiError(403, 'This study material is no longer available');
+  }
+
+  const user = await User.findById(req.user.id);
+  if (!user) {
+    throw new ApiError(404, 'User not found');
+  }
+
+  if (user.plan !== 'free' && user.planExpiresAt && new Date() > user.planExpiresAt) {
+    user.plan = 'free';
+    user.planExpiresAt = null;
+    await user.save();
+  }
+
+  if (material.accessLevel !== 'free') {
+    if (user.role !== 'admin') {
+      if (!user || (user.plan !== 'premium' && material.accessLevel === 'premium')) {
+        if (user.plan === 'free' && material.accessLevel !== 'free') {
+          throw new ApiError(403, 'Premium access required to preview this material');
+        }
+      }
+    }
+  }
+
+  const filename = buildDownloadFilename(material);
+  let previewUrl;
+
+  try {
+    previewUrl = await storageService.generatePresignedUrl({
+      fileUrl: material.fileUrl,
+      expiresIn: 300,
+      fileName: filename,
+      inline: true,
+    });
+  } catch (error) {
+    throw new ApiError(502, 'Unable to generate preview URL for study material');
+  }
+
+  res.status(200).json({
+    success: true,
+    data: {
+      previewUrl,
+      fileName: filename,
+      fileSize: material.fileSize,
+      expiresIn: 300,
+    },
+    message: 'Study material preview URL generated successfully',
+  });
+});
+
 const downloadStudyMaterial = asyncHandler(async (req, res) => {
   const { materialId } = req.params;
+
+  ensureValidMaterialId(materialId);
 
   const material = await StudyMaterial.findById(materialId);
   if (!material) {
@@ -347,6 +419,8 @@ const updateStudyMaterial = asyncHandler(async (req, res) => {
   const { materialId } = req.params;
   const updates = req.body;
 
+  ensureValidMaterialId(materialId);
+
   const material = await StudyMaterial.findById(materialId);
   if (!material) {
     throw new ApiError(404, 'Study material not found');
@@ -375,6 +449,8 @@ const updateStudyMaterial = asyncHandler(async (req, res) => {
 const deleteStudyMaterial = asyncHandler(async (req, res) => {
   const { materialId } = req.params;
 
+  ensureValidMaterialId(materialId);
+
   const material = await StudyMaterial.findById(materialId);
   if (!material) {
     throw new ApiError(404, 'Study material not found');
@@ -399,6 +475,8 @@ const deleteStudyMaterial = asyncHandler(async (req, res) => {
 const rateStudyMaterial = asyncHandler(async (req, res) => {
   const { materialId } = req.params;
   const { rating } = req.body;
+
+  ensureValidMaterialId(materialId);
 
   if (!rating || rating < 1 || rating > 5) {
     throw new ApiError(400, 'Rating must be between 1 and 5');
@@ -497,6 +575,7 @@ module.exports = {
   uploadStudyMaterial,
   listStudyMaterials,
   getStudyMaterial,
+  previewStudyMaterial,
   downloadStudyMaterial,
   getDownloadLimitStatus,
   updateStudyMaterial,

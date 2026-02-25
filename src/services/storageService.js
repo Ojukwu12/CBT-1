@@ -136,7 +136,7 @@ const deleteFile = async (fileUrl) => {
   await deleteLocalFile(fileUrl);
 };
 
-const generatePresignedUrl = async ({ fileUrl, expiresIn = 300, fileName }) => {
+const generatePresignedUrl = async ({ fileUrl, expiresIn = 300, fileName, inline = false }) => {
   const provider = (env.STORAGE_PROVIDER || 'local').toLowerCase();
 
   // For local files, return the original URL
@@ -159,12 +159,17 @@ const generatePresignedUrl = async ({ fileUrl, expiresIn = 300, fileName }) => {
   const key = decodeURIComponent(match[1]);
   const s3 = getS3Client();
 
+  let disposition;
+  if (inline) {
+    disposition = fileName ? `inline; filename="${fileName}"` : 'inline';
+  } else {
+    disposition = fileName ? `attachment; filename="${fileName}"` : 'attachment';
+  }
+
   const command = new GetObjectCommand({
     Bucket: env.S3_BUCKET,
     Key: key,
-    ResponseContentDisposition: fileName 
-      ? `attachment; filename="${fileName}"`
-      : 'attachment',
+    ResponseContentDisposition: disposition,
   });
 
   try {

@@ -43,6 +43,11 @@ router.post('/:courseId/:materialId/download', studyMaterialController.downloadS
 // Preferred download route (uses parent :courseId)
 router.post('/:materialId/download', studyMaterialController.downloadStudyMaterial);
 
+// Preview study material (temporary inline view URL)
+router.post('/:courseId/:materialId/preview', studyMaterialController.previewStudyMaterial);
+// Preferred preview route (uses parent :courseId)
+router.post('/:materialId/preview', studyMaterialController.previewStudyMaterial);
+
 // Update study material (admin/faculty only)
 router.patch('/:courseId/:materialId', isAdmin, validate(studyMaterialParamsSchema, 'params'), validate(updateStudyMaterialSchema), studyMaterialController.updateStudyMaterial);
 // Preferred update route (uses parent :courseId)
