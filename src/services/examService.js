@@ -40,16 +40,30 @@ class ExamService {
 
     const usageStats = await ExamSession.aggregate([
       {
+        $addFields: {
+          sessionStartedAt: { $ifNull: ['$startedAt', '$createdAt'] },
+        }
+      },
+      {
         $match: {
           userId: new mongoose.Types.ObjectId(userId),
           courseId: new mongoose.Types.ObjectId(courseId),
-          startedAt: { $gte: bounds.dayStart, $lt: bounds.dayEnd }
+          sessionStartedAt: { $gte: bounds.dayStart, $lt: bounds.dayEnd }
         }
       },
       {
         $group: {
           _id: null,
-          total: { $sum: '$totalQuestions' }
+          total: {
+            $sum: {
+              $convert: {
+                input: '$totalQuestions',
+                to: 'int',
+                onError: 0,
+                onNull: 0,
+              }
+            }
+          }
         }
       }
     ]);
