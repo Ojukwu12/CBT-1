@@ -136,7 +136,9 @@ const resendVerificationEmailSchema = Joi.object({
     }),
 });
 
-const refreshTokenSchema = Joi.object({});
+const refreshTokenSchema = Joi.object({
+  refreshToken: Joi.string().trim().optional(),
+});
 
 const logoutSchema = Joi.object({});
 

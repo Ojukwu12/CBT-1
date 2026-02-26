@@ -13,23 +13,64 @@ const { v4: uuidv4 } = require('uuid');
 const logger = new Logger('AuthController');
 
 const REFRESH_TOKEN_ROTATION_GRACE_SECONDS = Math.max(0, env.REFRESH_TOKEN_ROTATION_GRACE_SECONDS || 10);
+const REFRESH_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60;
+const REFRESH_TOKEN_TTL = `${REFRESH_TOKEN_TTL_SECONDS}s`;
+
+const resolveRefreshCookieSecure = () => {
+  if (typeof env.REFRESH_TOKEN_COOKIE_SECURE === 'boolean') {
+    return env.REFRESH_TOKEN_COOKIE_SECURE;
+  }
+  return env.NODE_ENV === 'production';
+};
+
+const resolveRefreshCookieSameSite = (isSecureCookie) => {
+  if (env.REFRESH_TOKEN_COOKIE_SAME_SITE) {
+    return env.REFRESH_TOKEN_COOKIE_SAME_SITE;
+  }
+  return isSecureCookie ? 'none' : 'lax';
+};
+
+const getRefreshCookieBaseOptions = () => {
+  const secure = resolveRefreshCookieSecure();
+  const sameSite = resolveRefreshCookieSameSite(secure);
+
+  const baseOptions = {
+    httpOnly: true,
+    secure,
+    sameSite,
+    path: env.REFRESH_TOKEN_COOKIE_PATH || '/',
+  };
+
+  if (env.REFRESH_TOKEN_COOKIE_DOMAIN) {
+    baseOptions.domain = env.REFRESH_TOKEN_COOKIE_DOMAIN;
+  }
+
+  return baseOptions;
+};
 
 const getRefreshCookieOptions = () => ({
-  httpOnly: true,
-  secure: env.NODE_ENV === 'production',
-  sameSite: env.NODE_ENV === 'production' ? 'none' : 'lax',
-  maxAge: 30 * 24 * 60 * 60 * 1000,
+  ...getRefreshCookieBaseOptions(),
+  maxAge: REFRESH_TOKEN_TTL_SECONDS * 1000,
 });
 
-const getRefreshCookieClearOptions = () => ({
-  httpOnly: true,
-  secure: env.NODE_ENV === 'production',
-  sameSite: env.NODE_ENV === 'production' ? 'none' : 'lax',
-});
+const getRefreshCookieClearOptions = () => getRefreshCookieBaseOptions();
 
 const getRefreshTokenFromRequest = (req) => {
   if (req.cookies?.refreshToken) {
     return req.cookies.refreshToken;
+  }
+
+  const headerToken = req.headers['x-refresh-token'];
+  if (typeof headerToken === 'string' && headerToken.trim()) {
+    return headerToken.trim();
+  }
+
+  const authorization = req.headers.authorization;
+  if (typeof authorization === 'string') {
+    const [scheme, value] = authorization.split(' ');
+    if (/^Bearer$/i.test(scheme) && typeof value === 'string' && value.trim()) {
+      return value.trim();
+    }
   }
 
   const bodyToken = req.body?.refreshToken;
@@ -42,7 +83,7 @@ const getRefreshTokenFromRequest = (req) => {
 
 const hashValue = (value) => crypto.createHash('sha256').update(value).digest('hex');
 
-const generateRefreshToken = (payload, expiresIn = env.JWT_REFRESH_TOKEN_TTL || '30d') => {
+const generateRefreshToken = (payload, expiresIn = REFRESH_TOKEN_TTL) => {
   return require('jsonwebtoken').sign(payload, env.REFRESH_TOKEN_SECRET, {
     expiresIn,
     issuer: env.JWT_ISSUER,
@@ -50,6 +91,13 @@ const generateRefreshToken = (payload, expiresIn = env.JWT_REFRESH_TOKEN_TTL || 
     algorithm: 'HS256',
   });
 };
+
+const buildAuthTokenPayload = ({ accessToken, refreshToken }) => ({
+  accessToken,
+  refreshToken,
+  expiresIn: env.JWT_ACCESS_TOKEN_TTL,
+  token: accessToken,
+});
 
 /**
  * Register a new user
@@ -209,8 +257,7 @@ const login = asyncHandler(async (req, res, next) => {
         planExpiresAt: user.planExpiresAt,
         emailVerifiedAt: user.emailVerifiedAt,
       },
-      token,
-      expiresIn: env.JWT_ACCESS_TOKEN_TTL,
+      ...buildAuthTokenPayload({ accessToken: token, refreshToken }),
     }, 'Login successful')
   );
 });
@@ -407,7 +454,9 @@ const refreshToken = asyncHandler(async (req, res, next) => {
     jti: uuidv4(),
   });
 
-  if (matchesCurrentToken) {
+  let outgoingRefreshToken = token;
+
+  if (env.ROTATE_REFRESH_TOKENS) {
     const newRefreshToken = generateRefreshToken({
       id: user._id,
       email: user.email,
@@ -422,12 +471,15 @@ const refreshToken = asyncHandler(async (req, res, next) => {
     await user.save();
 
     res.cookie('refreshToken', newRefreshToken, getRefreshCookieOptions());
+    outgoingRefreshToken = newRefreshToken;
   } else {
-    logger.info(`Accepted refresh token within grace window for user ${decoded.id}`);
+    if (matchesPreviousToken) {
+      logger.info(`Accepted refresh token within grace window for user ${decoded.id}`);
+    }
   }
 
   res.status(200).json(
-    new ApiResponse(200, { token: newAccessToken, expiresIn: env.JWT_ACCESS_TOKEN_TTL }, 'Token refreshed')
+    new ApiResponse(200, buildAuthTokenPayload({ accessToken: newAccessToken, refreshToken: outgoingRefreshToken }), 'Token refreshed')
   );
 });
 

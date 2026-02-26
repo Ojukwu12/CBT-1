@@ -80,6 +80,7 @@ const listQuestions = [
       page: Number(page),
       limit: Number(limit),
       q,
+      includeCorrectAnswer: req.user?.role === 'admin',
     });
 
     res.status(200).json({

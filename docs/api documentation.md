@@ -7,11 +7,19 @@ All endpoints use JSON unless specified. Most routes require `Authorization: Bea
 - `POST /api/auth/register`
 - `POST /api/auth/login`
 - `POST /api/auth/logout`
-- `POST /api/auth/refresh-token`
+- `POST /api/auth/refresh`
 - `POST /api/auth/verify-email`
 - `POST /api/auth/request-password-reset`
 - `POST /api/auth/reset-password`
 - `GET /api/auth/me`
+
+Refresh token contract (`POST /api/auth/refresh`):
+- Accepted input (first match wins):
+  - HttpOnly cookie: `refreshToken`
+  - Header: `x-refresh-token`
+  - Header: `Authorization: Bearer <refreshToken>`
+  - Body: `{ "refreshToken": "..." }`
+- Response token payload keys are consistent: `accessToken`, `refreshToken`, `expiresIn` (plus legacy `token` for compatibility).
 
 ## Exams
 

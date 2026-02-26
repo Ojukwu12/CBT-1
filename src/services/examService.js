@@ -183,6 +183,7 @@ class ExamService {
 
     if (dailyLimit !== null && remainingQuestionsForCourseToday <= 0) {
       throw new ApiError(429, `Daily question limit reached for this course (${dailyLimit}/day). Your limit resets at the end of today.`, {
+        courseId,
         dailyLimit,
         usedToday: questionsUsedTodayForCourse,
         remainingToday: 0,
@@ -238,6 +239,7 @@ class ExamService {
 
     if (questions.length === 0) {
       throw new ApiError(404, 'No questions available for this exam configuration', {
+        courseId,
         dailyLimit,
         usedToday: questionsUsedTodayForCourse,
         remainingToday: dailyLimit === null ? null : remainingQuestionsForCourseToday,

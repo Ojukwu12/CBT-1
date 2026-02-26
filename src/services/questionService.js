@@ -11,7 +11,7 @@ const createManyQuestions = async (questionsData) => {
 };
 
 const listQuestions = async (filters = {}, options = {}) => {
-  const { page = 1, limit = 20, q } = options;
+  const { page = 1, limit = 20, q, includeCorrectAnswer = false } = options;
   const query = { ...filters };
 
   if (q) {
@@ -19,10 +19,11 @@ const listQuestions = async (filters = {}, options = {}) => {
   }
 
   const skip = (page - 1) * limit;
+  const projection = includeCorrectAnswer ? '-__v' : '-correctAnswer -__v';
 
   const [data, total] = await Promise.all([
     Question.find(query)
-      .select('-correctAnswer -__v')
+      .select(projection)
       .sort(q ? { score: { $meta: 'textScore' } } : { createdAt: -1 })
       .skip(skip)
       .limit(limit),

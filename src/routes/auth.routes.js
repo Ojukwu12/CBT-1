@@ -94,6 +94,11 @@ router.post(
 /**
  * Refresh token
  * POST /api/auth/refresh
+ * Accepted input (first match wins):
+ * - HttpOnly cookie: refreshToken
+ * - Header: x-refresh-token
+ * - Header: Authorization: Bearer <refreshToken>
+ * - Body: { refreshToken: string }
  */
 router.post(
   '/refresh',
