@@ -14,6 +14,7 @@ const TARGET_QUESTION_COUNT = 20;
 const MAX_AI_ATTEMPTS = 2;
 const AI_GENERATION_ATTEMPT_TIMEOUT_MS = 50 * 1000;
 const AI_GENERATION_TOTAL_TIMEOUT_MS = 58 * 1000;
+const VALID_ANSWERS = new Set(['A', 'B', 'C', 'D']);
 
 const withTimeout = async (promise, timeoutMs, timeoutMessage) => {
   let timeoutId;
@@ -37,6 +38,47 @@ const normalizeQuestionText = (value = '') =>
     .replace(/[^a-z0-9\s]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+
+const normalizeAnswerLetter = (value = '') => {
+  const normalized = String(value).trim().toUpperCase();
+  const directMatch = normalized.match(/^([A-D])$/);
+  if (directMatch) {
+    return directMatch[1];
+  }
+
+  const decoratedMatch = normalized.match(/\b(?:OPTION\s*)?([A-D])\b/);
+  if (decoratedMatch) {
+    return decoratedMatch[1];
+  }
+
+  return null;
+};
+
+const normalizeAiQuestion = (question = {}) => {
+  const options = question.options || {};
+  const normalizedOptions = {
+    A: String(options.A || '').trim(),
+    B: String(options.B || '').trim(),
+    C: String(options.C || '').trim(),
+    D: String(options.D || '').trim(),
+  };
+
+  const hasCompleteOptions = Object.values(normalizedOptions).every((optionText) => optionText.length > 0);
+  if (!hasCompleteOptions) {
+    return null;
+  }
+
+  const normalizedAnswer = normalizeAnswerLetter(question.correctAnswer || question.answer);
+  if (!VALID_ANSWERS.has(normalizedAnswer)) {
+    return null;
+  }
+
+  return {
+    ...question,
+    options: normalizedOptions,
+    correctAnswer: normalizedAnswer,
+  };
+};
 
 const filterUniqueQuestions = (questions, existingTextSet) => {
   const unique = [];
@@ -234,19 +276,23 @@ const generateQuestionsFromMaterial = async (
       status: 'pending',
       isActive: true,
     });
-    if (cachedQuestions.length) {
+    const validCachedQuestions = cachedQuestions.filter((question) =>
+      VALID_ANSWERS.has(normalizeAnswerLetter(question.correctAnswer))
+    );
+
+    if (validCachedQuestions.length) {
       await SourceMaterial.findByIdAndUpdate(materialId, {
         processingStatus: 'completed',
         processingCompletedAt: new Date(),
         extractionMethod: 'ai_generated',
-        questionsGenerated: cachedQuestions.length,
-        questionsIds: cachedQuestions.map((q) => q._id),
+        questionsGenerated: validCachedQuestions.length,
+        questionsIds: validCachedQuestions.map((q) => q._id),
       });
 
       return {
         mode: 'ai',
         log: cachedLog,
-        questions: cachedQuestions,
+        questions: validCachedQuestions,
       };
     }
   }
@@ -326,7 +372,11 @@ const generateQuestionsFromMaterial = async (
         continue;
       }
 
-      const uniqueBatch = filterUniqueQuestions(generatedQuestions, existingQuestionTextSet);
+      const normalizedAiQuestions = (generatedQuestions || [])
+        .map((question) => normalizeAiQuestion(question))
+        .filter(Boolean);
+
+      const uniqueBatch = filterUniqueQuestions(normalizedAiQuestions, existingQuestionTextSet);
       if (!uniqueBatch.length) {
         continue;
       }

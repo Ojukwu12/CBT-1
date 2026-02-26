@@ -2,13 +2,31 @@ const { normalizeText } = require('./fileExtraction');
 const { sanitizeQuestionText } = require('./questionText');
 
 const QUESTION_START_REGEX = /^\s*(?:Q(?:uestion)?\s*)?(\d{1,3})\s*[\).:-]?\s+(.+)$/i;
-const OPTION_REGEX = /^\s*\(?([A-Da-d])\)?\s*[\).:-]\s*(.+)$/;
-const ANSWER_REGEX = /\b(?:right(?:\s+answer|\s+option)?|answer|ans|correct(?:\s+answer)?|correct\s+option|correct)\b\s*[:\-]?\s*([A-D])\b/i;
+const OPTION_REGEX = /^\s*(?:[\[\(]?\s*[✓✔☑✅]?\s*[\]\)]?\s*)?\(?([A-Da-d])\)?\s*[\).:-]\s*(.+)$/;
+const ANSWER_REGEX = /\b(?:right(?:\s+answer|\s+option)?|answer|ans|correct(?:\s+answer)?|correct\s+option|correct)\b\s*(?:is\s*)?[:\-]?\s*(?:[✓✔☑✅]\s*)?([A-D])\b/i;
 const HEADER_LINE_REGEXES = [
   /^\s*(department|faculty|course|course\s*code|code|exam|semester|session|level|time\s*(allowed|limit|taken)?|duration|instructions?)\b\s*[:\-]?/i,
   /^\s*(answer\s+all\s+questions|attempt\s+all\s+questions|choose\s+any\s+\d+|all\s+questions\s+carry)/i,
   /^\s*(name|matric\s*(no|number)|registration\s*(no|number)|date)\b\s*[:\-]?/i,
 ];
+
+const TICK_MARK_REGEX = /[✓✔☑✅]/;
+const TICKED_OPTION_LETTER_REGEX = /(?:[✓✔☑✅]\s*\(?([A-Da-d])\)?|\(?([A-Da-d])\)?\s*[\).:-]?\s*[✓✔☑✅])/;
+
+const normalizeAnswerLetter = (value = '') => {
+  const normalized = String(value).trim().toUpperCase();
+  const letterOnlyMatch = normalized.match(/^([A-D])$/);
+  if (letterOnlyMatch) {
+    return letterOnlyMatch[1];
+  }
+
+  const decoratedLetterMatch = normalized.match(/\b(?:OPTION\s*)?([A-D])\b/);
+  if (decoratedLetterMatch) {
+    return decoratedLetterMatch[1];
+  }
+
+  return null;
+};
 
 const isHeadingOrMetadataLine = (line = '') => {
   const trimmed = String(line).trim();
@@ -62,10 +80,11 @@ const parseBlock = (block) => {
   const options = {};
   let correctAnswer = null;
   let hasQuestionStem = false;
+  const tickedOptions = [];
 
   const answerMatch = block.match(ANSWER_REGEX);
   if (answerMatch) {
-    correctAnswer = answerMatch[1].toUpperCase();
+    correctAnswer = normalizeAnswerLetter(answerMatch[1]);
   }
 
   const textLines = [];
@@ -83,7 +102,16 @@ const parseBlock = (block) => {
 
     const optionMatch = line.match(OPTION_REGEX);
     if (optionMatch) {
-      options[optionMatch[1].toUpperCase()] = optionMatch[2].trim();
+      const optionKey = optionMatch[1].toUpperCase();
+      const optionValue = optionMatch[2].trim();
+      options[optionKey] = optionValue;
+
+      const tickedLetterMatch = line.match(TICKED_OPTION_LETTER_REGEX);
+      if (tickedLetterMatch?.[1] || tickedLetterMatch?.[2]) {
+        tickedOptions.push((tickedLetterMatch[1] || tickedLetterMatch[2]).toUpperCase());
+      } else if (TICK_MARK_REGEX.test(line) || TICK_MARK_REGEX.test(optionValue)) {
+        tickedOptions.push(optionKey);
+      }
       continue;
     }
 
@@ -102,6 +130,13 @@ const parseBlock = (block) => {
 
   if (!questionText) {
     return null;
+  }
+
+  if (!correctAnswer) {
+    const uniqueTickedOptions = Array.from(new Set(tickedOptions));
+    if (uniqueTickedOptions.length === 1) {
+      correctAnswer = uniqueTickedOptions[0];
+    }
   }
 
   return {
