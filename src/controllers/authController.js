@@ -12,12 +12,33 @@ const { v4: uuidv4 } = require('uuid');
 
 const logger = new Logger('AuthController');
 
+const REFRESH_TOKEN_ROTATION_GRACE_SECONDS = Math.max(0, env.REFRESH_TOKEN_ROTATION_GRACE_SECONDS || 10);
+
 const getRefreshCookieOptions = () => ({
   httpOnly: true,
   secure: env.NODE_ENV === 'production',
   sameSite: env.NODE_ENV === 'production' ? 'none' : 'lax',
   maxAge: 30 * 24 * 60 * 60 * 1000,
 });
+
+const getRefreshCookieClearOptions = () => ({
+  httpOnly: true,
+  secure: env.NODE_ENV === 'production',
+  sameSite: env.NODE_ENV === 'production' ? 'none' : 'lax',
+});
+
+const getRefreshTokenFromRequest = (req) => {
+  if (req.cookies?.refreshToken) {
+    return req.cookies.refreshToken;
+  }
+
+  const bodyToken = req.body?.refreshToken;
+  if (typeof bodyToken === 'string' && bodyToken.trim()) {
+    return bodyToken.trim();
+  }
+
+  return null;
+};
 
 const hashValue = (value) => crypto.createHash('sha256').update(value).digest('hex');
 
@@ -168,6 +189,8 @@ const login = asyncHandler(async (req, res, next) => {
   });
 
   user.refreshTokenHash = hashValue(refreshToken);
+  user.previousRefreshTokenHash = undefined;
+  user.previousRefreshTokenValidUntil = undefined;
   await user.save();
 
   res.cookie('refreshToken', refreshToken, getRefreshCookieOptions());
@@ -260,6 +283,8 @@ const resetPassword = asyncHandler(async (req, res, next) => {
   user.passwordResetOtpHash = undefined;
   user.passwordResetOtpExpiresAt = undefined;
   user.refreshTokenHash = undefined;
+  user.previousRefreshTokenHash = undefined;
+  user.previousRefreshTokenValidUntil = undefined;
 
   await user.save();
 
@@ -334,7 +359,7 @@ const verifyEmail = asyncHandler(async (req, res, next) => {
  * POST /api/auth/refresh
  */
 const refreshToken = asyncHandler(async (req, res, next) => {
-  const token = req.cookies?.refreshToken;
+  const token = getRefreshTokenFromRequest(req);
   if (!token) {
     return next(new ApiError(401, 'Refresh token missing'));
   }
@@ -354,14 +379,22 @@ const refreshToken = asyncHandler(async (req, res, next) => {
     return next(new ApiError(401, 'Invalid refresh token type'));
   }
 
-  const user = await User.findById(decoded.id).select('+refreshTokenHash');
+  const user = await User.findById(decoded.id).select('+refreshTokenHash +previousRefreshTokenHash +previousRefreshTokenValidUntil');
   if (!user || !user.refreshTokenHash) {
     return next(new ApiError(401, 'Refresh token invalid'));
   }
 
-  if (hashValue(token) !== user.refreshTokenHash) {
-    user.refreshTokenHash = undefined;
-    await user.save();
+  const incomingTokenHash = hashValue(token);
+  const now = Date.now();
+  const matchesCurrentToken = incomingTokenHash === user.refreshTokenHash;
+  const matchesPreviousToken = !matchesCurrentToken
+    && Boolean(user.previousRefreshTokenHash)
+    && incomingTokenHash === user.previousRefreshTokenHash
+    && user.previousRefreshTokenValidUntil
+    && user.previousRefreshTokenValidUntil.getTime() > now;
+
+  if (!matchesCurrentToken && !matchesPreviousToken) {
+    logger.warn(`Refresh token hash mismatch for user ${decoded.id}`);
     return next(new ApiError(401, 'Refresh token invalid'));
   }
 
@@ -374,18 +407,24 @@ const refreshToken = asyncHandler(async (req, res, next) => {
     jti: uuidv4(),
   });
 
-  const newRefreshToken = generateRefreshToken({
-    id: user._id,
-    email: user.email,
-    role: user.role,
-    type: 'refresh',
-    jti: uuidv4(),
-  });
+  if (matchesCurrentToken) {
+    const newRefreshToken = generateRefreshToken({
+      id: user._id,
+      email: user.email,
+      role: user.role,
+      type: 'refresh',
+      jti: uuidv4(),
+    });
 
-  user.refreshTokenHash = hashValue(newRefreshToken);
-  await user.save();
+    user.previousRefreshTokenHash = user.refreshTokenHash;
+    user.previousRefreshTokenValidUntil = new Date(Date.now() + (REFRESH_TOKEN_ROTATION_GRACE_SECONDS * 1000));
+    user.refreshTokenHash = hashValue(newRefreshToken);
+    await user.save();
 
-  res.cookie('refreshToken', newRefreshToken, getRefreshCookieOptions());
+    res.cookie('refreshToken', newRefreshToken, getRefreshCookieOptions());
+  } else {
+    logger.info(`Accepted refresh token within grace window for user ${decoded.id}`);
+  }
 
   res.status(200).json(
     new ApiResponse(200, { token: newAccessToken, expiresIn: env.JWT_ACCESS_TOKEN_TTL }, 'Token refreshed')
@@ -397,7 +436,7 @@ const refreshToken = asyncHandler(async (req, res, next) => {
  * POST /api/auth/logout
  */
 const logout = asyncHandler(async (req, res, next) => {
-  const token = req.cookies?.refreshToken;
+  const token = getRefreshTokenFromRequest(req);
   if (token) {
     try {
       const decoded = require('jsonwebtoken').verify(token, env.REFRESH_TOKEN_SECRET, {
@@ -408,9 +447,11 @@ const logout = asyncHandler(async (req, res, next) => {
       if (decoded.type !== 'refresh') {
         throw new Error('Invalid token type');
       }
-      const user = await User.findById(decoded.id).select('+refreshTokenHash');
+      const user = await User.findById(decoded.id).select('+refreshTokenHash +previousRefreshTokenHash +previousRefreshTokenValidUntil');
       if (user) {
         user.refreshTokenHash = undefined;
+        user.previousRefreshTokenHash = undefined;
+        user.previousRefreshTokenValidUntil = undefined;
         await user.save();
       }
     } catch (err) {
@@ -418,7 +459,7 @@ const logout = asyncHandler(async (req, res, next) => {
     }
   }
 
-  res.clearCookie('refreshToken', getRefreshCookieOptions());
+  res.clearCookie('refreshToken', getRefreshCookieClearOptions());
   res.status(200).json(new ApiResponse(200, null, 'Logged out successfully'));
 });
 

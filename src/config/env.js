@@ -26,6 +26,7 @@ const env = {
   REFRESH_TOKEN_SECRET: process.env.REFRESH_TOKEN_SECRET || process.env.JWT_SECRET,
   JWT_ACCESS_TOKEN_TTL: process.env.JWT_ACCESS_TOKEN_TTL || '15m',
   JWT_REFRESH_TOKEN_TTL: process.env.JWT_REFRESH_TOKEN_TTL || '30d',
+  REFRESH_TOKEN_ROTATION_GRACE_SECONDS: parseInt(process.env.REFRESH_TOKEN_ROTATION_GRACE_SECONDS || '10', 10),
   JWT_ISSUER: process.env.JWT_ISSUER || 'cbt-backend',
   JWT_AUDIENCE: process.env.JWT_AUDIENCE || 'cbt-client',
   PAYSTACK_SECRET_KEY: process.env.PAYSTACK_SECRET_KEY,

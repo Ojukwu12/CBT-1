@@ -108,6 +108,14 @@ const userSchema = new mongoose.Schema(
       type: String,
       select: false,
     },
+    previousRefreshTokenHash: {
+      type: String,
+      select: false,
+    },
+    previousRefreshTokenValidUntil: {
+      type: Date,
+      select: false,
+    },
   },
   { timestamps: true }
 );
