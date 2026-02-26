@@ -361,24 +361,23 @@ const resetPassword = asyncHandler(async (req, res, next) => {
  */
 const verifyResetToken = asyncHandler(async (req, res, next) => {
   const { email, token } = req.query;
+  const frontendUrl = env.FRONTEND_URL || 'http://localhost:5173';
 
   const user = await User.findOne({ email }).select('+passwordResetTokenHash');
   if (!user) {
-    return next(new ApiError(404, 'User not found'));
+    return res.redirect(`${frontendUrl}/reset-password?status=error&reason=user_not_found&message=User not found`);
   }
 
   const now = Date.now();
   if (!user.passwordResetTokenHash || !user.passwordResetTokenExpiresAt || user.passwordResetTokenExpiresAt.getTime() <= now) {
-    return next(new ApiError(400, 'Reset token expired'));
+    return res.redirect(`${frontendUrl}/reset-password?status=error&reason=expired&message=Reset token expired&email=${encodeURIComponent(email)}`);
   }
 
   if (hashValue(token) !== user.passwordResetTokenHash) {
-    return next(new ApiError(400, 'Invalid reset token'));
+    return res.redirect(`${frontendUrl}/reset-password?status=error&reason=invalid_token&message=Invalid reset token&email=${encodeURIComponent(email)}`);
   }
 
-  res.status(200).json(
-    new ApiResponse(200, { email, token }, 'Reset token valid')
-  );
+  return res.redirect(`${frontendUrl}/reset-password?status=success&message=Reset token valid&email=${encodeURIComponent(email)}&token=${encodeURIComponent(token)}`);
 });
 
 /**
