@@ -99,6 +99,12 @@ const buildAuthTokenPayload = ({ accessToken, refreshToken }) => ({
   token: accessToken,
 });
 
+const buildResendVerificationMeta = (email) => ({
+  email,
+  canResendVerification: true,
+  resendVerificationEndpoint: '/api/auth/resend-verification-email',
+});
+
 /**
  * Register a new user
  * POST /api/auth/register
@@ -209,6 +215,15 @@ const login = asyncHandler(async (req, res, next) => {
   // Check if user is active
   if (!user.isActive) {
     return next(new ApiError(403, 'Account is deactivated'));
+  }
+
+  // Block login until email is verified
+  if (!user.emailVerifiedAt) {
+    return next(new ApiError(
+      403,
+      'Email not verified. Please verify your email before logging in.',
+      buildResendVerificationMeta(user.email)
+    ));
   }
 
   // Check if plan is expired
@@ -385,11 +400,11 @@ const verifyEmail = asyncHandler(async (req, res, next) => {
 
   const now = Date.now();
   if (!user.emailVerificationTokenHash || !user.emailVerificationTokenExpiresAt || user.emailVerificationTokenExpiresAt.getTime() <= now) {
-    return res.redirect(`${frontendUrl}/email-verified?status=error&message=Verification link expired`);
+    return res.redirect(`${frontendUrl}/email-verified?status=error&reason=expired&message=Verification link expired. Request a new verification email.&email=${encodeURIComponent(email)}`);
   }
 
   if (hashValue(token) !== user.emailVerificationTokenHash) {
-    return res.redirect(`${frontendUrl}/email-verified?status=error&message=Invalid verification token`);
+    return res.redirect(`${frontendUrl}/email-verified?status=error&reason=invalid_token&message=Invalid verification token. Request a new verification email.&email=${encodeURIComponent(email)}`);
   }
 
   user.emailVerifiedAt = new Date();
@@ -560,7 +575,10 @@ const resendVerificationEmail = asyncHandler(async (req, res, next) => {
   }
 
   res.status(200).json(
-    new ApiResponse(200, null, 'Verification email sent successfully')
+    new ApiResponse(200, {
+      ...buildResendVerificationMeta(email),
+      verificationEmailSent: true,
+    }, 'Verification email sent successfully')
   );
 });
 

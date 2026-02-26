@@ -8,10 +8,25 @@ All endpoints use JSON unless specified. Most routes require `Authorization: Bea
 - `POST /api/auth/login`
 - `POST /api/auth/logout`
 - `POST /api/auth/refresh`
+- `POST /api/auth/resend-verification-email`
 - `POST /api/auth/verify-email`
 - `POST /api/auth/request-password-reset`
 - `POST /api/auth/reset-password`
 - `GET /api/auth/me`
+
+Login verification contract (`POST /api/auth/login`):
+- If email is not verified, login is blocked with `403` and details include:
+  - `email`
+  - `canResendVerification: true`
+  - `resendVerificationEndpoint: /api/auth/resend-verification-email`
+
+Resend verification (`POST /api/auth/resend-verification-email`):
+- Body: `{ "email": "user@example.com" }`
+- Returns success payload with:
+  - `email`
+  - `canResendVerification: true`
+  - `resendVerificationEndpoint: /api/auth/resend-verification-email`
+  - `verificationEmailSent: true`
 
 Refresh token contract (`POST /api/auth/refresh`):
 - Accepted input (first match wins):

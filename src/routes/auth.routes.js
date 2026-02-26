@@ -27,6 +27,7 @@ router.post(
  * Login user
  * POST /api/auth/login
  * Body: { email, password }
+ * Note: email must be verified before login is allowed.
  */
 router.post(
   '/login',
@@ -83,6 +84,7 @@ router.get(
  * Resend verification email
  * POST /api/auth/resend-verification-email
  * Body: { email }
+ * Use this when verification link is expired/invalid or user never received it.
  */
 router.post(
   '/resend-verification-email',
