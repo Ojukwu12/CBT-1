@@ -158,6 +158,17 @@ const buildResendVerificationMeta = (email) => ({
   resendVerificationEndpoint: '/api/auth/resend-verification-email',
 });
 
+const buildFrontendVerificationLink = (email, verifyToken) => {
+  const frontendBase = env.FRONTEND_URL || 'http://localhost:5173';
+  const verifyPath = env.EMAIL_VERIFICATION_FRONTEND_PATH || '/email-verified';
+  const params = new URLSearchParams({
+    token: verifyToken,
+    email,
+  });
+
+  return `${frontendBase}${verifyPath}?${params.toString()}`;
+};
+
 const setNoStoreHeaders = (res) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
   res.set('Pragma', 'no-cache');
@@ -218,7 +229,7 @@ const register = asyncHandler(async (req, res, next) => {
 
   await user.save();
 
-  const verifyLink = `${env.BACKEND_URL || 'http://localhost:3000'}/api/auth/verify-email?token=${verifyToken}&email=${encodeURIComponent(email)}`;
+  const verifyLink = buildFrontendVerificationLink(email, verifyToken);
 
   // Send verification email
   let emailSent = false;
@@ -706,7 +717,7 @@ const resendVerificationEmail = asyncHandler(async (req, res, next) => {
   user.emailVerificationTokenExpiresAt = verifyTokenExpiresAt;
   await user.save();
 
-  const verifyLink = `${env.BACKEND_URL || 'http://localhost:3000'}/api/auth/verify-email?token=${verifyToken}&email=${encodeURIComponent(email)}`;
+  const verifyLink = buildFrontendVerificationLink(email, verifyToken);
 
   // Send verification email
   try {
