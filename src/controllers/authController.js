@@ -66,17 +66,17 @@ const getRefreshTokenFromRequest = (req) => {
     return { token: headerToken.trim(), source: 'header' };
   }
 
-  const authorization = req.headers.authorization;
-  if (typeof authorization === 'string') {
-    const [scheme, value] = authorization.split(' ');
-    if (/^Bearer$/i.test(scheme) && typeof value === 'string' && value.trim()) {
-      return { token: value.trim(), source: 'authorization' };
-    }
-  }
-
   const bodyToken = req.body?.refreshToken;
   if (typeof bodyToken === 'string' && bodyToken.trim()) {
     return { token: bodyToken.trim(), source: 'body' };
+  }
+
+  const authorization = req.headers.authorization;
+  if (typeof authorization === 'string') {
+    const [scheme, value] = authorization.split(' ');
+    if (/^Refresh$/i.test(scheme) && typeof value === 'string' && value.trim()) {
+      return { token: value.trim(), source: 'authorization' };
+    }
   }
 
   return { token: null, source: null };
