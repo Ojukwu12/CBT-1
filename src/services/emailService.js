@@ -414,43 +414,49 @@ class EmailService {
         };
       }
 
-      // Send via Brevo API
-      const response = await axios.post(
-        `${this.apiUrl}/smtp/email`,
-        {
-          to: [
-            {
+      // Send one email per recipient to guarantee recipient privacy
+      const messageIds = [];
+      for (const recipient of recipients) {
+        const response = await axios.post(
+          `${this.apiUrl}/smtp/email`,
+          {
+            to: [
+              {
+                email: recipient,
+              },
+            ],
+            sender: {
               email: this.senderEmail,
               name: this.senderName,
             },
-          ],
-          bcc: recipients.map(email => ({ email })),
-          sender: {
-            email: this.senderEmail,
-            name: this.senderName,
+            subject,
+            htmlContent: compiledHtml,
+            replyTo: {
+              email: env.SUPPORT_EMAIL || 'support@universitycbt.com',
+            },
           },
-          subject,
-          htmlContent: compiledHtml,
-          replyTo: {
-            email: env.SUPPORT_EMAIL || 'support@universitycbt.com',
-          },
-        },
-        {
-          headers: {
-            'api-key': this.apiKey,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
+          {
+            headers: {
+              'api-key': this.apiKey,
+              'Content-Type': 'application/json',
+            },
+          }
+        );
 
-      logger.info(`Bulk email sent to ${recipients.length} recipients - Subject: ${subject} - MessageID: ${response.data.messageId}`);
+        if (response?.data?.messageId) {
+          messageIds.push(response.data.messageId);
+        }
+      }
+
+      logger.info(`Bulk email sent privately to ${recipients.length} recipients - Subject: ${subject}`);
 
       return {
         success: true,
         recipientCount: recipients.length,
         subject,
         template,
-        messageId: response.data.messageId,
+        messageId: messageIds[0],
+        messageIds,
         timestamp: new Date(),
       };
     } catch (err) {
