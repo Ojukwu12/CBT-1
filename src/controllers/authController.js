@@ -254,7 +254,7 @@ const login = asyncHandler(async (req, res, next) => {
   const { email, password } = req.body;
 
   // Find user and explicitly select password
-  const user = await User.findOne({ email }).select('+password +refreshTokenHash');
+  const user = await User.findOne({ email }).select('+password +refreshTokenHash +passwordResetTokenHash +passwordResetOtpHash');
   if (!user) {
     return next(new ApiError(401, 'Invalid email or password'));
   }
@@ -307,6 +307,10 @@ const login = asyncHandler(async (req, res, next) => {
   user.refreshTokenHash = hashValue(refreshToken);
   user.previousRefreshTokenHash = undefined;
   user.previousRefreshTokenValidUntil = undefined;
+  user.passwordResetTokenHash = undefined;
+  user.passwordResetTokenExpiresAt = undefined;
+  user.passwordResetOtpHash = undefined;
+  user.passwordResetOtpExpiresAt = undefined;
   addRefreshSession(user, refreshToken, 'cookie');
   await user.save();
 
