@@ -135,4 +135,15 @@ router.get(
   authController.getCurrentUser
 );
 
+/**
+ * Get user profile (minimal)
+ * GET /api/auth/profile
+ * Headers: Authorization: Bearer token
+ */
+router.get(
+  '/profile',
+  verifyToken,
+  authController.getProfile
+);
+
 module.exports = router;

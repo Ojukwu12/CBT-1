@@ -597,10 +597,35 @@ const getCurrentUser = asyncHandler(async (req, res, next) => {
   );
 });
 
+/**
+ * Get minimal profile (requires auth)
+ * GET /api/auth/profile
+ */
+const getProfile = asyncHandler(async (req, res, next) => {
+  const user = await User.findById(req.user.id).select('firstName lastName email');
+
+  if (!user) {
+    return next(new ApiError(404, 'User not found'));
+  }
+
+  const name = [user.firstName, user.lastName]
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+
+  res.status(200).json(
+    new ApiResponse(200, {
+      name,
+      email: user.email,
+    }, 'Profile retrieved successfully')
+  );
+});
+
 module.exports = {
   register,
   login,
   getCurrentUser,
+  getProfile,
   forgotPassword,
   resetPassword,
   verifyResetToken,
