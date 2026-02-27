@@ -44,6 +44,37 @@ class EmailService {
   }
 
   /**
+   * Get available email template names (without .html extension)
+   */
+  getAvailableTemplates() {
+    try {
+      if (!fs.existsSync(this.templatesDir)) {
+        return [];
+      }
+
+      return fs
+        .readdirSync(this.templatesDir)
+        .filter((fileName) => fileName.endsWith('.html'))
+        .map((fileName) => fileName.replace(/\.html$/, ''));
+    } catch (err) {
+      logger.error('Failed to list email templates', err);
+      return [];
+    }
+  }
+
+  /**
+   * Check whether a template exists
+   */
+  hasTemplate(templateName) {
+    if (!templateName || typeof templateName !== 'string') {
+      return false;
+    }
+
+    const templatePath = path.join(this.templatesDir, `${templateName}.html`);
+    return fs.existsSync(templatePath);
+  }
+
+  /**
    * Load email template
    */
   loadTemplate(templateName) {

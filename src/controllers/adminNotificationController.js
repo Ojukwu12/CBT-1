@@ -18,6 +18,13 @@ const sendBulkEmail = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'Subject and template are required');
   }
 
+  if (!emailService.hasTemplate(template)) {
+    const availableTemplates = emailService.getAvailableTemplates();
+    throw new ApiError(400, `Invalid email template: ${template}`, {
+      availableTemplates,
+    });
+  }
+
   // Build query based on filters
   const query = {};
   if (filters.plan) query.plan = filters.plan;
@@ -54,6 +61,9 @@ const sendBulkEmail = asyncHandler(async (req, res) => {
     );
   } catch (err) {
     logger.error('Failed to send bulk email:', err);
+    if (err instanceof ApiError) {
+      throw err;
+    }
     throw new ApiError(500, 'Failed to send bulk email');
   }
 });
