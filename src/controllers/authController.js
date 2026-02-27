@@ -15,6 +15,7 @@ const logger = new Logger('AuthController');
 const REFRESH_TOKEN_ROTATION_GRACE_SECONDS = Math.max(0, env.REFRESH_TOKEN_ROTATION_GRACE_SECONDS || 10);
 const REFRESH_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60;
 const REFRESH_TOKEN_TTL = `${REFRESH_TOKEN_TTL_SECONDS}s`;
+const MAX_REFRESH_SESSIONS_PER_USER = 10;
 
 const resolveRefreshCookieSecure = () => {
   if (typeof env.REFRESH_TOKEN_COOKIE_SECURE === 'boolean') {
@@ -82,6 +83,58 @@ const getRefreshTokenFromRequest = (req) => {
 };
 
 const hashValue = (value) => crypto.createHash('sha256').update(value).digest('hex');
+
+const getRefreshExpiryDate = () => new Date(Date.now() + (REFRESH_TOKEN_TTL_SECONDS * 1000));
+
+const trimRefreshSessions = (sessions = []) => {
+  return sessions
+    .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+    .slice(0, MAX_REFRESH_SESSIONS_PER_USER);
+};
+
+const addRefreshSession = (user, token, source = 'unknown') => {
+  if (!Array.isArray(user.refreshSessions)) {
+    user.refreshSessions = [];
+  }
+
+  user.refreshSessions.push({
+    tokenHash: hashValue(token),
+    source: source || 'unknown',
+    createdAt: new Date(),
+    lastUsedAt: new Date(),
+    expiresAt: getRefreshExpiryDate(),
+    previousTokenHash: null,
+    previousTokenValidUntil: null,
+    revokedAt: null,
+  });
+
+  user.refreshSessions = trimRefreshSessions(user.refreshSessions);
+};
+
+const findMatchingRefreshSession = (user, incomingTokenHash, nowMs) => {
+  if (!Array.isArray(user?.refreshSessions) || user.refreshSessions.length === 0) {
+    return { session: null, matchedPrevious: false };
+  }
+
+  for (const session of user.refreshSessions) {
+    if (session.revokedAt) continue;
+    if (session.expiresAt && new Date(session.expiresAt).getTime() <= nowMs) continue;
+
+    if (session.tokenHash === incomingTokenHash) {
+      return { session, matchedPrevious: false };
+    }
+
+    const previousStillValid = session.previousTokenHash
+      && session.previousTokenValidUntil
+      && new Date(session.previousTokenValidUntil).getTime() > nowMs;
+
+    if (previousStillValid && session.previousTokenHash === incomingTokenHash) {
+      return { session, matchedPrevious: true };
+    }
+  }
+
+  return { session: null, matchedPrevious: false };
+};
 
 const generateRefreshToken = (payload, expiresIn = REFRESH_TOKEN_TTL) => {
   return require('jsonwebtoken').sign(payload, env.REFRESH_TOKEN_SECRET, {
@@ -254,6 +307,7 @@ const login = asyncHandler(async (req, res, next) => {
   user.refreshTokenHash = hashValue(refreshToken);
   user.previousRefreshTokenHash = undefined;
   user.previousRefreshTokenValidUntil = undefined;
+  addRefreshSession(user, refreshToken, 'cookie');
   await user.save();
 
   res.cookie('refreshToken', refreshToken, getRefreshCookieOptions());
@@ -347,6 +401,7 @@ const resetPassword = asyncHandler(async (req, res, next) => {
   user.refreshTokenHash = undefined;
   user.previousRefreshTokenHash = undefined;
   user.previousRefreshTokenValidUntil = undefined;
+  user.refreshSessions = [];
 
   await user.save();
 
@@ -445,18 +500,24 @@ const refreshToken = asyncHandler(async (req, res, next) => {
   }
 
   const user = await User.findById(decoded.id).select('+refreshTokenHash +previousRefreshTokenHash +previousRefreshTokenValidUntil');
-  if (!user || !user.refreshTokenHash) {
+  if (!user) {
     return next(new ApiError(401, 'Refresh token invalid'));
   }
 
   const incomingTokenHash = hashValue(token);
   const now = Date.now();
-  const matchesCurrentToken = incomingTokenHash === user.refreshTokenHash;
-  const matchesPreviousToken = !matchesCurrentToken
+
+  const { session: matchingSession, matchedPrevious: sessionMatchedPrevious } = findMatchingRefreshSession(user, incomingTokenHash, now);
+
+  const legacyMatchesCurrent = incomingTokenHash === user.refreshTokenHash;
+  const legacyMatchesPrevious = !legacyMatchesCurrent
     && Boolean(user.previousRefreshTokenHash)
     && incomingTokenHash === user.previousRefreshTokenHash
     && user.previousRefreshTokenValidUntil
     && user.previousRefreshTokenValidUntil.getTime() > now;
+
+  const matchesCurrentToken = Boolean(matchingSession) ? !sessionMatchedPrevious : legacyMatchesCurrent;
+  const matchesPreviousToken = Boolean(matchingSession) ? sessionMatchedPrevious : legacyMatchesPrevious;
 
   if (!matchesCurrentToken && !matchesPreviousToken) {
     logger.warn(`Refresh token hash mismatch for user ${decoded.id}`);
@@ -487,11 +548,29 @@ const refreshToken = asyncHandler(async (req, res, next) => {
     user.previousRefreshTokenHash = user.refreshTokenHash;
     user.previousRefreshTokenValidUntil = new Date(Date.now() + (REFRESH_TOKEN_ROTATION_GRACE_SECONDS * 1000));
     user.refreshTokenHash = hashValue(newRefreshToken);
+
+    if (matchingSession) {
+      matchingSession.previousTokenHash = matchingSession.tokenHash;
+      matchingSession.previousTokenValidUntil = new Date(Date.now() + (REFRESH_TOKEN_ROTATION_GRACE_SECONDS * 1000));
+      matchingSession.tokenHash = hashValue(newRefreshToken);
+      matchingSession.lastUsedAt = new Date();
+      matchingSession.expiresAt = getRefreshExpiryDate();
+      matchingSession.source = source || matchingSession.source || 'unknown';
+      user.refreshSessions = trimRefreshSessions(user.refreshSessions || []);
+    }
+
     await user.save();
 
     res.cookie('refreshToken', newRefreshToken, getRefreshCookieOptions());
     outgoingRefreshToken = newRefreshToken;
   } else {
+    if (matchingSession) {
+      matchingSession.lastUsedAt = new Date();
+      matchingSession.source = source || matchingSession.source || 'unknown';
+      user.refreshSessions = trimRefreshSessions(user.refreshSessions || []);
+      await user.save();
+    }
+
     if (matchesPreviousToken) {
       logger.info(`Accepted refresh token within grace window for user ${decoded.id} without re-rotation`);
     }
@@ -524,9 +603,28 @@ const logout = asyncHandler(async (req, res, next) => {
       }
       const user = await User.findById(decoded.id).select('+refreshTokenHash +previousRefreshTokenHash +previousRefreshTokenValidUntil');
       if (user) {
-        user.refreshTokenHash = undefined;
-        user.previousRefreshTokenHash = undefined;
-        user.previousRefreshTokenValidUntil = undefined;
+        const incomingTokenHash = hashValue(token);
+
+        if (Array.isArray(user.refreshSessions) && user.refreshSessions.length > 0) {
+          for (const session of user.refreshSessions) {
+            if (session.revokedAt) continue;
+            const isCurrentMatch = session.tokenHash === incomingTokenHash;
+            const isPreviousMatch = session.previousTokenHash === incomingTokenHash;
+
+            if (isCurrentMatch || isPreviousMatch) {
+              session.revokedAt = new Date();
+              session.previousTokenHash = null;
+              session.previousTokenValidUntil = null;
+            }
+          }
+        }
+
+        if (user.refreshTokenHash === incomingTokenHash || user.previousRefreshTokenHash === incomingTokenHash) {
+          user.refreshTokenHash = undefined;
+          user.previousRefreshTokenHash = undefined;
+          user.previousRefreshTokenValidUntil = undefined;
+        }
+
         await user.save();
       }
     } catch (err) {

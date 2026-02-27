@@ -116,6 +116,41 @@ const userSchema = new mongoose.Schema(
       type: Date,
       select: false,
     },
+    refreshSessions: [{
+      tokenHash: {
+        type: String,
+        required: true,
+      },
+      source: {
+        type: String,
+        enum: ['cookie', 'header', 'authorization', 'body', 'unknown'],
+        default: 'unknown',
+      },
+      createdAt: {
+        type: Date,
+        default: Date.now,
+      },
+      lastUsedAt: {
+        type: Date,
+        default: Date.now,
+      },
+      expiresAt: {
+        type: Date,
+        required: true,
+      },
+      previousTokenHash: {
+        type: String,
+        default: null,
+      },
+      previousTokenValidUntil: {
+        type: Date,
+        default: null,
+      },
+      revokedAt: {
+        type: Date,
+        default: null,
+      },
+    }],
   },
   { timestamps: true }
 );
