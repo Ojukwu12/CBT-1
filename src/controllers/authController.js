@@ -61,6 +61,10 @@ const getRefreshTokenFromRequest = (req) => {
     return { token: req.cookies.refreshToken, source: 'cookie' };
   }
 
+  if (req.cookies?.refresh_token) {
+    return { token: req.cookies.refresh_token, source: 'cookie' };
+  }
+
   const headerToken = req.headers['x-refresh-token'];
   if (typeof headerToken === 'string' && headerToken.trim()) {
     return { token: headerToken.trim(), source: 'header' };
@@ -71,10 +75,15 @@ const getRefreshTokenFromRequest = (req) => {
     return { token: bodyToken.trim(), source: 'body' };
   }
 
+  const bodyTokenAlias = req.body?.token || req.body?.refresh_token;
+  if (typeof bodyTokenAlias === 'string' && bodyTokenAlias.trim()) {
+    return { token: bodyTokenAlias.trim(), source: 'body' };
+  }
+
   const authorization = req.headers.authorization;
   if (typeof authorization === 'string') {
     const [scheme, value] = authorization.split(' ');
-    if (/^Refresh$/i.test(scheme) && typeof value === 'string' && value.trim()) {
+    if ((/^Refresh$/i.test(scheme) || /^Bearer$/i.test(scheme)) && typeof value === 'string' && value.trim()) {
       return { token: value.trim(), source: 'authorization' };
     }
   }

@@ -111,17 +111,60 @@ const resetPasswordTokenQuerySchema = Joi.object({
   token: Joi.string().required(),
 });
 
+const emailValidator = Joi.string().email();
+
+const normalizeQueryValue = (value) => {
+  const normalized = String(value || '').trim();
+
+  if (!normalized) {
+    return normalized;
+  }
+
+  try {
+    return decodeURIComponent(normalized);
+  } catch (error) {
+    return normalized;
+  }
+};
+
+const isValidEmail = (value) => emailValidator.validate(value).error === undefined;
+
 const verifyEmailQuerySchema = Joi.object({
   email: Joi.string()
-    .email()
     .required()
     .trim()
     .lowercase()
     .messages({
-      'string.email': 'Must be a valid email address',
       'string.empty': 'Email is required',
     }),
-  token: Joi.string().required(),
+  token: Joi.string().required().trim(),
+}).custom((value, helpers) => {
+  const emailParam = normalizeQueryValue(value.email);
+  const tokenParam = normalizeQueryValue(value.token);
+
+  const emailInEmailParam = isValidEmail(String(emailParam).toLowerCase());
+  const emailInTokenParam = isValidEmail(String(tokenParam).toLowerCase());
+
+  if (!emailInEmailParam && !emailInTokenParam) {
+    return helpers.error('any.custom', { message: 'Must include a valid email in query params' });
+  }
+
+  if (emailInEmailParam && emailInTokenParam) {
+    return helpers.error('any.custom', { message: 'Verification token is invalid or missing' });
+  }
+
+  const normalizedEmail = (emailInEmailParam ? emailParam : tokenParam).toLowerCase().trim();
+  const normalizedToken = (emailInEmailParam ? tokenParam : emailParam).trim();
+
+  if (!normalizedToken) {
+    return helpers.error('any.custom', { message: 'Verification token is required' });
+  }
+
+  return {
+    ...value,
+    email: normalizedEmail,
+    token: normalizedToken,
+  };
 });
 
 const resendVerificationEmailSchema = Joi.object({
