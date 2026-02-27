@@ -357,6 +357,70 @@ const deletePromoCode = asyncHandler(async (req, res) => {
 });
 
 /**
+ * Deactivate promo code
+ * POST /api/admin/promo-codes/:code/deactivate
+ */
+const deactivatePromoCode = asyncHandler(async (req, res) => {
+  const { code } = req.params;
+
+  const promoCode = await PromoCode.findOne({ code: code.toUpperCase() });
+  if (!promoCode) {
+    throw new ApiError(404, 'Promo code not found');
+  }
+
+  if (!promoCode.isActive) {
+    return res.status(200).json({
+      success: true,
+      data: promoCode,
+      message: 'Promo code is already inactive',
+    });
+  }
+
+  promoCode.isActive = false;
+  await promoCode.save();
+
+  logger.info(`Promo code deactivated: ${code} by admin ${req.user.id}`);
+
+  res.status(200).json({
+    success: true,
+    data: promoCode,
+    message: 'Promo code deactivated successfully',
+  });
+});
+
+/**
+ * Reactivate promo code
+ * POST /api/admin/promo-codes/:code/reactivate
+ */
+const reactivatePromoCode = asyncHandler(async (req, res) => {
+  const { code } = req.params;
+
+  const promoCode = await PromoCode.findOne({ code: code.toUpperCase() });
+  if (!promoCode) {
+    throw new ApiError(404, 'Promo code not found');
+  }
+
+  if (promoCode.isActive) {
+    return res.status(200).json({
+      success: true,
+      data: promoCode,
+      message: 'Promo code is already active',
+    });
+  }
+
+  promoCode.isActive = true;
+  await promoCode.save();
+
+  logger.info(`Promo code reactivated: ${code} by admin ${req.user.id}`);
+
+  res.status(200).json({
+    success: true,
+    data: promoCode,
+    message: 'Promo code reactivated successfully',
+  });
+});
+
+/**
  * Get promo code usage stats
  * GET /api/admin/promo-codes/:code/stats
  */
@@ -478,6 +542,8 @@ module.exports = {
   createPromoCode,
   listPromoCodes,
   updatePromoCode,
+  deactivatePromoCode,
+  reactivatePromoCode,
   deletePromoCode,
   getPromoCodeStats,
   getPricingAnalytics,

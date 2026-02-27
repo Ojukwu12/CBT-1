@@ -70,6 +70,8 @@ router.get('/pricing/analytics', adminReadLimiter, adminPricingController.getPri
 router.post('/promo-codes', adminWriteLimiter, validate(createPromoSchema), adminPricingController.createPromoCode);
 router.get('/promo-codes', adminReadLimiter, adminPricingController.listPromoCodes);
 router.put('/promo-codes/:code', adminWriteLimiter, validate(updatePromoSchema), adminPricingController.updatePromoCode);
+router.post('/promo-codes/:code/deactivate', adminWriteLimiter, adminPricingController.deactivatePromoCode);
+router.post('/promo-codes/:code/reactivate', adminWriteLimiter, adminPricingController.reactivatePromoCode);
 router.delete('/promo-codes/:code', adminWriteLimiter, adminPricingController.deletePromoCode);
 router.get('/promo-codes/:code/stats', adminReadLimiter, adminPricingController.getPromoCodeStats);
 
