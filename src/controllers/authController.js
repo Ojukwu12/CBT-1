@@ -158,6 +158,32 @@ const buildResendVerificationMeta = (email) => ({
   resendVerificationEndpoint: '/api/auth/resend-verification-email',
 });
 
+const setNoStoreHeaders = (res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+};
+
+const issuePasswordResetChallenge = async (user) => {
+  const resetToken = crypto.randomBytes(32).toString('hex');
+  const resetOtp = Math.floor(100000 + Math.random() * 900000).toString();
+
+  user.passwordResetTokenHash = hashValue(resetToken);
+  user.passwordResetTokenExpiresAt = new Date(Date.now() + 60 * 60 * 1000);
+  user.passwordResetOtpHash = hashValue(resetOtp);
+  user.passwordResetOtpExpiresAt = new Date(Date.now() + 60 * 60 * 1000);
+
+  await user.save();
+
+  const resetLink = `${env.FRONTEND_URL || 'http://localhost:5173'}/reset-password?token=${encodeURIComponent(resetToken)}&email=${encodeURIComponent(user.email)}`;
+
+  await emailService.sendPasswordResetOptionsEmail(user, {
+    otp: resetOtp,
+    resetLink,
+    expiresInMinutes: 60,
+  });
+};
+
 /**
  * Register a new user
  * POST /api/auth/register
@@ -347,26 +373,33 @@ const forgotPassword = asyncHandler(async (req, res, next) => {
     return next(new ApiError(404, 'User not found'));
   }
 
-  const resetToken = crypto.randomBytes(32).toString('hex');
-  const resetOtp = Math.floor(100000 + Math.random() * 900000).toString();
-
-  user.passwordResetTokenHash = hashValue(resetToken);
-  user.passwordResetTokenExpiresAt = new Date(Date.now() + 60 * 60 * 1000);
-  user.passwordResetOtpHash = hashValue(resetOtp);
-  user.passwordResetOtpExpiresAt = new Date(Date.now() + 60 * 60 * 1000);
-
-  await user.save();
-
-  const resetLink = `${env.FRONTEND_URL || 'http://localhost:5173'}/reset-password?token=${encodeURIComponent(resetToken)}&email=${encodeURIComponent(email)}`;
-
-  await emailService.sendPasswordResetOptionsEmail(user, {
-    otp: resetOtp,
-    resetLink,
-    expiresInMinutes: 60,
-  });
+  await issuePasswordResetChallenge(user);
 
   res.status(200).json(
     new ApiResponse(200, null, 'Password reset email sent')
+  );
+});
+
+/**
+ * Resend password reset options (new OTP + new link)
+ * POST /api/auth/resend-reset-password
+ */
+const resendResetPassword = asyncHandler(async (req, res, next) => {
+  const { email } = req.body;
+
+  const user = await User.findOne({ email });
+  if (!user) {
+    return next(new ApiError(404, 'User not found'));
+  }
+
+  await issuePasswordResetChallenge(user);
+
+  res.status(200).json(
+    new ApiResponse(200, {
+      email: user.email,
+      resetEmailSent: true,
+      resendResetPasswordEndpoint: '/api/auth/resend-reset-password',
+    }, 'Password reset options resent successfully')
   );
 });
 
@@ -409,6 +442,8 @@ const resetPassword = asyncHandler(async (req, res, next) => {
 
   await user.save();
 
+  setNoStoreHeaders(res);
+
   res.status(200).json(
     new ApiResponse(200, null, 'Password reset successful')
   );
@@ -423,23 +458,28 @@ const verifyResetToken = asyncHandler(async (req, res, next) => {
   const frontendUrl = env.FRONTEND_URL || 'http://localhost:5173';
 
   if (!email || !token) {
+    setNoStoreHeaders(res);
     return res.redirect(`${frontendUrl}/reset-password?status=error&reason=missing_params&message=Reset link is incomplete`);
   }
 
   const user = await User.findOne({ email }).select('+passwordResetTokenHash');
   if (!user) {
+    setNoStoreHeaders(res);
     return res.redirect(`${frontendUrl}/reset-password?status=error&reason=user_not_found&message=User not found`);
   }
 
   const now = Date.now();
   if (!user.passwordResetTokenHash || !user.passwordResetTokenExpiresAt || user.passwordResetTokenExpiresAt.getTime() <= now) {
+    setNoStoreHeaders(res);
     return res.redirect(`${frontendUrl}/reset-password?status=error&reason=expired&message=Reset token expired&email=${encodeURIComponent(email)}`);
   }
 
   if (hashValue(token) !== user.passwordResetTokenHash) {
+    setNoStoreHeaders(res);
     return res.redirect(`${frontendUrl}/reset-password?status=error&reason=invalid_token&message=Invalid reset token&email=${encodeURIComponent(email)}`);
   }
 
+  setNoStoreHeaders(res);
   return res.redirect(`${frontendUrl}/reset-password?status=success&message=Reset token valid&email=${encodeURIComponent(email)}&token=${encodeURIComponent(token)}`);
 });
 
@@ -738,6 +778,7 @@ module.exports = {
   getCurrentUser,
   getProfile,
   forgotPassword,
+  resendResetPassword,
   resetPassword,
   verifyResetToken,
   verifyEmail,

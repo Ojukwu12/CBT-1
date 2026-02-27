@@ -49,6 +49,18 @@ router.post(
 );
 
 /**
+ * Resend password reset options (new OTP + new magic link)
+ * POST /api/auth/resend-reset-password
+ * Body: { email }
+ */
+router.post(
+  '/resend-reset-password',
+  authLimiter,
+  validate(forgotPasswordSchema),
+  authController.resendResetPassword
+);
+
+/**
  * Reset password (token or OTP)
  * POST /api/auth/reset-password
  * Body: { email, token? | otp?, newPassword }
