@@ -418,7 +418,13 @@ class EmailService {
       const response = await axios.post(
         `${this.apiUrl}/smtp/email`,
         {
-          to: recipients.map(email => ({ email })),
+          to: [
+            {
+              email: this.senderEmail,
+              name: this.senderName,
+            },
+          ],
+          bcc: recipients.map(email => ({ email })),
           sender: {
             email: this.senderEmail,
             name: this.senderName,
