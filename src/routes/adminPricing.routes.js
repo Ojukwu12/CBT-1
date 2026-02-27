@@ -27,24 +27,33 @@ const updatePricingSchema = Joi.object({
 const createPromoSchema = Joi.object({
   code: Joi.string().min(3).max(20).uppercase().required(),
   description: Joi.string().max(200).optional(),
-  discountType: Joi.string().valid('percentage', 'fixed').required(),
+  discountType: Joi.string().trim().valid('percentage', 'fixed', 'fixed (₦)', 'fixed (n)', 'percent', 'percentage (%)').required(),
   discountValue: Joi.number().min(0).required(),
-  applicablePlans: Joi.array().items(Joi.string().valid('basic', 'premium')).optional(),
-  maxUsageCount: Joi.number().integer().min(1).optional().allow(null),
-  maxUsagePerUser: Joi.number().integer().min(1).required(),
-  validFrom: Joi.date().required(),
-  validUntil: Joi.date().greater(Joi.ref('validFrom')).required(),
+  applicablePlans: Joi.array().items(Joi.string().valid('free', 'basic', 'premium')).optional(),
+  maxUsageCount: Joi.number().integer().min(1).optional().allow(null, ''),
+  maxTotalUsage: Joi.number().integer().min(1).optional().allow(null, ''),
+  maxUsagePerUser: Joi.number().integer().min(1).optional(),
+  maxUsesPerUser: Joi.number().integer().min(1).optional(),
+  validFrom: Joi.alternatives().try(Joi.date(), Joi.string().trim()).required(),
+  validUntil: Joi.alternatives().try(Joi.date(), Joi.string().trim()).required(),
+}).custom((value, helpers) => {
+  if (value.maxUsagePerUser === undefined && value.maxUsesPerUser === undefined) {
+    return helpers.error('any.custom', { message: 'maxUsagePerUser or maxUsesPerUser is required' });
+  }
+  return value;
 });
 
 const updatePromoSchema = Joi.object({
   description: Joi.string().max(200).optional(),
-  discountType: Joi.string().valid('percentage', 'fixed').optional(),
+  discountType: Joi.string().trim().valid('percentage', 'fixed', 'fixed (₦)', 'fixed (n)', 'percent', 'percentage (%)').optional(),
   discountValue: Joi.number().min(0).optional(),
-  applicablePlans: Joi.array().items(Joi.string().valid('basic', 'premium')).optional(),
-  maxUsageCount: Joi.number().integer().min(1).optional().allow(null),
+  applicablePlans: Joi.array().items(Joi.string().valid('free', 'basic', 'premium')).optional(),
+  maxUsageCount: Joi.number().integer().min(1).optional().allow(null, ''),
+  maxTotalUsage: Joi.number().integer().min(1).optional().allow(null, ''),
   maxUsagePerUser: Joi.number().integer().min(1).optional(),
-  validFrom: Joi.date().optional(),
-  validUntil: Joi.date().optional(),
+  maxUsesPerUser: Joi.number().integer().min(1).optional(),
+  validFrom: Joi.alternatives().try(Joi.date(), Joi.string().trim()).optional(),
+  validUntil: Joi.alternatives().try(Joi.date(), Joi.string().trim()).optional(),
   isActive: Joi.boolean().optional(),
 });
 

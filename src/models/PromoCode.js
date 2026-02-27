@@ -26,7 +26,7 @@ const promoCodeSchema = new mongoose.Schema(
     },
     applicablePlans: [{
       type: String,
-      enum: ['basic', 'premium'],
+      enum: ['free', 'basic', 'premium'],
     }],
     maxUsageCount: {
       type: Number,

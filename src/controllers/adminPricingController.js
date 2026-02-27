@@ -8,6 +8,33 @@ const cacheService = require('../services/cacheService');
 
 const logger = new Logger('AdminPricingController');
 
+const normalizeDiscountType = (value) => {
+  if (!value) return value;
+  const normalized = String(value).trim().toLowerCase();
+  if (normalized.includes('fixed')) return 'fixed';
+  if (normalized.includes('percent')) return 'percentage';
+  return normalized;
+};
+
+const parseDateInput = (value) => {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+
+  const raw = String(value).trim();
+  const ddmmyyyyMatch = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (ddmmyyyyMatch) {
+    const [, dd, mm, yyyy] = ddmmyyyyMatch;
+    return new Date(Number(yyyy), Number(mm) - 1, Number(dd), 0, 0, 0, 0);
+  }
+
+  return new Date(raw);
+};
+
+const parseOptionalUsageLimit = (value) => {
+  if (value === undefined || value === null || value === '') return null;
+  return Number(value);
+};
+
 /**
  * Get current plan pricing
  * GET /api/admin/pricing
@@ -140,10 +167,34 @@ const createPromoCode = asyncHandler(async (req, res) => {
     discountValue,
     applicablePlans,
     maxUsageCount,
+    maxTotalUsage,
     maxUsagePerUser,
+    maxUsesPerUser,
     validFrom,
     validUntil,
   } = req.body;
+
+  const normalizedDiscountType = normalizeDiscountType(discountType);
+  const normalizedValidFrom = parseDateInput(validFrom);
+  const normalizedValidUntil = parseDateInput(validUntil);
+  const normalizedMaxUsageCount = parseOptionalUsageLimit(maxUsageCount ?? maxTotalUsage);
+  const normalizedMaxUsagePerUser = Number(maxUsagePerUser ?? maxUsesPerUser ?? 1);
+
+  if (!normalizedValidFrom || Number.isNaN(normalizedValidFrom.getTime())) {
+    throw new ApiError(400, 'validFrom must be a valid date');
+  }
+
+  if (!normalizedValidUntil || Number.isNaN(normalizedValidUntil.getTime())) {
+    throw new ApiError(400, 'validUntil must be a valid date');
+  }
+
+  if (normalizedValidUntil <= normalizedValidFrom) {
+    throw new ApiError(400, 'validUntil must be later than validFrom');
+  }
+
+  if (!['fixed', 'percentage'].includes(normalizedDiscountType)) {
+    throw new ApiError(400, 'discountType must be fixed or percentage');
+  }
 
   // Check if code already exists
   const existingPromo = await PromoCode.findOne({ code: code.toUpperCase() });
@@ -154,13 +205,13 @@ const createPromoCode = asyncHandler(async (req, res) => {
   const promoCode = new PromoCode({
     code: code.toUpperCase(),
     description,
-    discountType,
+    discountType: normalizedDiscountType,
     discountValue,
     applicablePlans: applicablePlans || ['basic', 'premium'],
-    maxUsageCount,
-    maxUsagePerUser: maxUsagePerUser || 1,
-    validFrom: new Date(validFrom),
-    validUntil: new Date(validUntil),
+    maxUsageCount: normalizedMaxUsageCount,
+    maxUsagePerUser: normalizedMaxUsagePerUser,
+    validFrom: normalizedValidFrom,
+    validUntil: normalizedValidUntil,
     isActive: true,
     createdBy: req.user.id,
   });
@@ -217,7 +268,38 @@ const listPromoCodes = asyncHandler(async (req, res) => {
  */
 const updatePromoCode = asyncHandler(async (req, res) => {
   const { code } = req.params;
-  const updates = req.body;
+  const updates = { ...req.body };
+
+  if (updates.discountType !== undefined) {
+    updates.discountType = normalizeDiscountType(updates.discountType);
+    if (!['fixed', 'percentage'].includes(updates.discountType)) {
+      throw new ApiError(400, 'discountType must be fixed or percentage');
+    }
+  }
+
+  if (updates.validFrom !== undefined) {
+    const parsed = parseDateInput(updates.validFrom);
+    if (!parsed || Number.isNaN(parsed.getTime())) {
+      throw new ApiError(400, 'validFrom must be a valid date');
+    }
+    updates.validFrom = parsed;
+  }
+
+  if (updates.validUntil !== undefined) {
+    const parsed = parseDateInput(updates.validUntil);
+    if (!parsed || Number.isNaN(parsed.getTime())) {
+      throw new ApiError(400, 'validUntil must be a valid date');
+    }
+    updates.validUntil = parsed;
+  }
+
+  if (updates.maxTotalUsage !== undefined && updates.maxUsageCount === undefined) {
+    updates.maxUsageCount = parseOptionalUsageLimit(updates.maxTotalUsage);
+  }
+
+  if (updates.maxUsesPerUser !== undefined && updates.maxUsagePerUser === undefined) {
+    updates.maxUsagePerUser = Number(updates.maxUsesPerUser);
+  }
 
   const promoCode = await PromoCode.findOne({ code: code.toUpperCase() });
   if (!promoCode) {

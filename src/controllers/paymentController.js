@@ -19,6 +19,14 @@ const cacheService = require('../services/cacheService');
 
 const logger = new Logger('PaymentController');
 
+const getPendingPaymentWindowStart = () => new Date(Date.now() - 60 * 60 * 1000);
+
+const normalizePromoCodeValue = (promoCode) => {
+  if (!promoCode || typeof promoCode !== 'string') return null;
+  const normalized = promoCode.trim().toUpperCase();
+  return normalized || null;
+};
+
 /**
  * Initiate payment
  * POST /api/payments/initialize
@@ -27,6 +35,7 @@ const logger = new Logger('PaymentController');
 const initializePayment = asyncHandler(async (req, res) => {
   const { plan, promoCode } = req.body;
   const userId = req.user.id;
+  const normalizedPromoCode = normalizePromoCodeValue(promoCode);
 
   // Get user
   const user = await User.findById(userId).select('-password');
@@ -44,7 +53,7 @@ const initializePayment = asyncHandler(async (req, res) => {
     userId,
     status: 'pending',
     plan,
-    createdAt: { $gte: new Date(Date.now() - 60 * 60 * 1000) },
+    createdAt: { $gte: getPendingPaymentWindowStart() },
   });
 
   if (existingPendingPayment) {
@@ -53,6 +62,20 @@ const initializePayment = asyncHandler(async (req, res) => {
       409,
       'You already have a pending payment for this plan. Please complete or cancel it first.'
     );
+  }
+
+  // Enforce one promo code per active payment cycle
+  const pendingPaymentCycle = await Transaction.findOne({
+    userId,
+    status: 'pending',
+    createdAt: { $gte: getPendingPaymentWindowStart() },
+  }).sort({ createdAt: -1 });
+
+  if (pendingPaymentCycle?.promoCode && normalizedPromoCode && pendingPaymentCycle.promoCode !== normalizedPromoCode) {
+    throw new ApiError(409, 'Only one promo code is allowed per payment cycle. Complete or cancel your current pending payment first.', {
+      lockedPromoCode: pendingPaymentCycle.promoCode,
+      pendingReference: pendingPaymentCycle.paystackReference,
+    });
   }
 
   // Get plan pricing
@@ -69,8 +92,8 @@ const initializePayment = asyncHandler(async (req, res) => {
   let promoCodeDoc = null;
 
   // Validate and apply promo code if provided
-  if (promoCode) {
-    promoCodeDoc = await PromoCode.findOne({ code: promoCode.toUpperCase() });
+  if (normalizedPromoCode) {
+    promoCodeDoc = await PromoCode.findOne({ code: normalizedPromoCode });
 
     if (!promoCodeDoc) {
       throw new ApiError(404, 'Promo code not found');
@@ -92,7 +115,7 @@ const initializePayment = asyncHandler(async (req, res) => {
     discountAmount = promoCodeDoc.calculateDiscount(originalPrice);
     finalAmount = originalPrice - discountAmount;
 
-    logger.info(`Promo code ${promoCode} applied: Original ₦${originalPrice}, Discount ₦${discountAmount}, Final ₦${finalAmount}`);
+    logger.info(`Promo code ${normalizedPromoCode} applied: Original ₦${originalPrice}, Discount ₦${discountAmount}, Final ₦${finalAmount}`);
   }
 
   // Initialize payment with Paystack
@@ -101,7 +124,7 @@ const initializePayment = asyncHandler(async (req, res) => {
     originalPrice,
     discountAmount,
     finalAmount,
-    promoCode: promoCode || null,
+    promoCode: normalizedPromoCode,
   });
 
   // Create transaction record
@@ -113,7 +136,7 @@ const initializePayment = asyncHandler(async (req, res) => {
     originalPrice,
     discountAmount,
     amount: finalAmount,
-    promoCode: promoCode ? promoCode.toUpperCase() : null,
+    promoCode: normalizedPromoCode,
     promoCodeId: promoCodeDoc ? promoCodeDoc._id : null,
     paystackReference: paymentData.reference,
     status: 'pending',
@@ -138,7 +161,19 @@ const initializePayment = asyncHandler(async (req, res) => {
         originalPrice,
         discountAmount,
         finalAmount,
-        promoCode: promoCode || null,
+        promoCode: normalizedPromoCode,
+        savings: discountAmount,
+        savingsPercentage: originalPrice > 0 ? Math.round((discountAmount / originalPrice) * 100) : 0,
+      },
+      promo: {
+        applied: Boolean(promoCodeDoc),
+        code: promoCodeDoc?.code || null,
+        description: promoCodeDoc?.description || null,
+        discountType: promoCodeDoc?.discountType || null,
+        discountValue: promoCodeDoc?.discountValue ?? null,
+        message: promoCodeDoc
+          ? `The new price after promo code is ₦${finalAmount.toLocaleString()}`
+          : `No promo applied. Total payable is ₦${finalAmount.toLocaleString()}`,
       },
     }, 'Payment initialized. Redirect user to authorization URL.')
   );
@@ -642,12 +677,26 @@ const handleWebhook = asyncHandler(async (req, res) => {
 const validatePromoCode = asyncHandler(async (req, res) => {
   const { promoCode, plan } = req.body;
   const userId = req.user.id;
+  const normalizedPromoCode = normalizePromoCodeValue(promoCode);
 
-  if (!promoCode) {
+  if (!normalizedPromoCode) {
     throw new ApiError(400, 'Promo code is required');
   }
 
-  const promo = await PromoCode.findOne({ code: promoCode.toUpperCase() });
+  const pendingPaymentCycle = await Transaction.findOne({
+    userId,
+    status: 'pending',
+    createdAt: { $gte: getPendingPaymentWindowStart() },
+  }).sort({ createdAt: -1 });
+
+  if (pendingPaymentCycle?.promoCode && pendingPaymentCycle.promoCode !== normalizedPromoCode) {
+    throw new ApiError(409, 'Only one promo code is allowed per payment cycle. Complete or cancel your current pending payment first.', {
+      lockedPromoCode: pendingPaymentCycle.promoCode,
+      pendingReference: pendingPaymentCycle.paystackReference,
+    });
+  }
+
+  const promo = await PromoCode.findOne({ code: normalizedPromoCode });
 
   if (!promo) {
     throw new ApiError(404, 'Promo code not found');
@@ -686,6 +735,7 @@ const validatePromoCode = asyncHandler(async (req, res) => {
         savings: discountAmount,
         savingsPercentage: Math.round((discountAmount / originalPrice) * 100),
       },
+      message: `The new price after promo code is ₦${finalAmount.toLocaleString()}`,
       validUntil: promo.validUntil,
     }, 'Promo code is valid')
   );
