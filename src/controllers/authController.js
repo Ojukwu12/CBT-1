@@ -57,28 +57,28 @@ const getRefreshCookieClearOptions = () => getRefreshCookieBaseOptions();
 
 const getRefreshTokenFromRequest = (req) => {
   if (req.cookies?.refreshToken) {
-    return req.cookies.refreshToken;
+    return { token: req.cookies.refreshToken, source: 'cookie' };
   }
 
   const headerToken = req.headers['x-refresh-token'];
   if (typeof headerToken === 'string' && headerToken.trim()) {
-    return headerToken.trim();
+    return { token: headerToken.trim(), source: 'header' };
   }
 
   const authorization = req.headers.authorization;
   if (typeof authorization === 'string') {
     const [scheme, value] = authorization.split(' ');
     if (/^Bearer$/i.test(scheme) && typeof value === 'string' && value.trim()) {
-      return value.trim();
+      return { token: value.trim(), source: 'authorization' };
     }
   }
 
   const bodyToken = req.body?.refreshToken;
   if (typeof bodyToken === 'string' && bodyToken.trim()) {
-    return bodyToken.trim();
+    return { token: bodyToken.trim(), source: 'body' };
   }
 
-  return null;
+  return { token: null, source: null };
 };
 
 const hashValue = (value) => crypto.createHash('sha256').update(value).digest('hex');
@@ -424,7 +424,7 @@ const verifyEmail = asyncHandler(async (req, res, next) => {
  * POST /api/auth/refresh
  */
 const refreshToken = asyncHandler(async (req, res, next) => {
-  const token = getRefreshTokenFromRequest(req);
+  const { token, source } = getRefreshTokenFromRequest(req);
   if (!token) {
     return next(new ApiError(401, 'Refresh token missing'));
   }
@@ -473,8 +473,9 @@ const refreshToken = asyncHandler(async (req, res, next) => {
   });
 
   let outgoingRefreshToken = token;
+  const shouldRotateRefreshToken = env.ROTATE_REFRESH_TOKENS && source === 'cookie';
 
-  if (env.ROTATE_REFRESH_TOKENS && matchesCurrentToken) {
+  if (shouldRotateRefreshToken && matchesCurrentToken) {
     const newRefreshToken = generateRefreshToken({
       id: user._id,
       email: user.email,
@@ -494,6 +495,10 @@ const refreshToken = asyncHandler(async (req, res, next) => {
     if (matchesPreviousToken) {
       logger.info(`Accepted refresh token within grace window for user ${decoded.id} without re-rotation`);
     }
+
+    if (env.ROTATE_REFRESH_TOKENS && source !== 'cookie' && matchesCurrentToken) {
+      logger.info(`Refresh token rotation skipped for ${source}-based token flow for user ${decoded.id}`);
+    }
   }
 
   res.status(200).json(
@@ -506,7 +511,7 @@ const refreshToken = asyncHandler(async (req, res, next) => {
  * POST /api/auth/logout
  */
 const logout = asyncHandler(async (req, res, next) => {
-  const token = getRefreshTokenFromRequest(req);
+  const { token } = getRefreshTokenFromRequest(req);
   if (token) {
     try {
       const decoded = require('jsonwebtoken').verify(token, env.REFRESH_TOKEN_SECRET, {
