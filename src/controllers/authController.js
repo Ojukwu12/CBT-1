@@ -353,7 +353,7 @@ const forgotPassword = asyncHandler(async (req, res, next) => {
 
   await user.save();
 
-  const resetLink = `${env.BACKEND_URL || 'http://localhost:3000'}/api/auth/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
+  const resetLink = `${env.FRONTEND_URL || 'http://localhost:5173'}/reset-password?token=${encodeURIComponent(resetToken)}&email=${encodeURIComponent(email)}`;
 
   await emailService.sendPasswordResetOptionsEmail(user, {
     otp: resetOtp,
