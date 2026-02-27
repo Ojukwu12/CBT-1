@@ -3,7 +3,7 @@ const authController = require('../controllers/authController');
 const validate = require('../middleware/validate.middleware');
 const { verifyToken } = require('../middleware/auth.middleware');
 const { authLimiter, authRefreshLimiter } = require('../middleware/rateLimit.middleware');
-const { registerSchema, loginSchema, forgotPasswordSchema, resetPasswordSchema, resetPasswordTokenQuerySchema, verifyEmailQuerySchema, resendVerificationEmailSchema, refreshTokenSchema, logoutSchema } = require('../validators/auth.validator');
+const { registerSchema, loginSchema, forgotPasswordSchema, resetPasswordSchema, verifyEmailQuerySchema, resendVerificationEmailSchema, refreshTokenSchema, logoutSchema } = require('../validators/auth.validator');
 
 const router = express.Router();
 
@@ -66,7 +66,6 @@ router.post(
  */
 router.get(
   '/reset-password',
-  validate(resetPasswordTokenQuerySchema, 'query'),
   authController.verifyResetToken
 );
 

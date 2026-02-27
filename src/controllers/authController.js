@@ -363,6 +363,10 @@ const verifyResetToken = asyncHandler(async (req, res, next) => {
   const { email, token } = req.query;
   const frontendUrl = env.FRONTEND_URL || 'http://localhost:5173';
 
+  if (!email || !token) {
+    return res.redirect(`${frontendUrl}/reset-password?status=error&reason=missing_params&message=Reset link is incomplete`);
+  }
+
   const user = await User.findOne({ email }).select('+passwordResetTokenHash');
   if (!user) {
     return res.redirect(`${frontendUrl}/reset-password?status=error&reason=user_not_found&message=User not found`);
@@ -470,7 +474,7 @@ const refreshToken = asyncHandler(async (req, res, next) => {
 
   let outgoingRefreshToken = token;
 
-  if (env.ROTATE_REFRESH_TOKENS) {
+  if (env.ROTATE_REFRESH_TOKENS && matchesCurrentToken) {
     const newRefreshToken = generateRefreshToken({
       id: user._id,
       email: user.email,
@@ -488,7 +492,7 @@ const refreshToken = asyncHandler(async (req, res, next) => {
     outgoingRefreshToken = newRefreshToken;
   } else {
     if (matchesPreviousToken) {
-      logger.info(`Accepted refresh token within grace window for user ${decoded.id}`);
+      logger.info(`Accepted refresh token within grace window for user ${decoded.id} without re-rotation`);
     }
   }
 
