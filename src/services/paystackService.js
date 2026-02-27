@@ -117,7 +117,12 @@ class PaystackService {
 
       const pricing = await this.getPlanPricing();
       const planConfig = pricing[plan];
-      const amountInKobo = planConfig.price * 100; // Convert Naira to Kobo
+      const originalPrice = planConfig.price;
+      const providedFinalAmount = Number(metadata.finalAmount);
+      const payableAmount = Number.isFinite(providedFinalAmount)
+        ? Math.max(0, Math.round(providedFinalAmount))
+        : originalPrice;
+      const amountInKobo = payableAmount * 100; // Convert Naira to Kobo
 
       const payload = {
         email,
@@ -146,7 +151,7 @@ class PaystackService {
         authorizationUrl: response.data.data.authorization_url,
         accessCode: response.data.data.access_code,
         plan,
-        amount: planConfig.price,
+        amount: payableAmount,
       };
     } catch (err) {
       logger.error(`Payment initialization failed for ${email}`, err);
