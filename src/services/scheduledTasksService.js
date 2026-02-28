@@ -30,6 +30,7 @@ class ScheduledTasksService {
       this.scheduleAutoDowngradeExpiredPlans();
       this.schedulePlanExpiryWarnings();
       this.scheduleTransactionCleanup();
+      this.scheduleAuthArtifactCleanup();
       this.isRunning = true;
       logger.info('All scheduled tasks initialized successfully');
     } catch (err) {
@@ -168,6 +169,27 @@ class ScheduledTasksService {
   }
 
   /**
+   * Clean up expired auth artifacts (runs hourly)
+   * Removes expired verification tokens, reset tokens/otp, stale refresh windows/sessions
+   */
+  scheduleAuthArtifactCleanup() {
+    const task = cron.schedule('0 * * * *', async () => {
+      logger.info('Starting auth artifact cleanup');
+      try {
+        const result = await User.clearExpiredAuthArtifacts(new Date());
+        if ((result?.modifiedCount || 0) > 0) {
+          logger.info(`Cleaned auth artifacts for ${result.modifiedCount} users`);
+        }
+      } catch (err) {
+        logger.error('Auth artifact cleanup scheduled task failed', err);
+      }
+    });
+
+    this.jobs.push(task);
+    logger.info('Scheduled: Auth artifact cleanup (hourly)');
+  }
+
+  /**
    * Stop all scheduled tasks (for graceful shutdown)
    */
   stopAll() {
@@ -189,6 +211,7 @@ class ScheduledTasksService {
         'Auto-downgrade expired plans (daily at 2 AM)',
         'Plan expiry warnings (daily at 8 AM)',
         'Transaction cleanup (weekly on Sunday at 3 AM)',
+        'Auth artifact cleanup (hourly)',
       ],
     };
   }

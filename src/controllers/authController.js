@@ -204,6 +204,14 @@ const issuePasswordResetChallenge = async (user) => {
   });
 };
 
+const cleanupUserAuthArtifacts = async (user) => {
+  if (!user || typeof user.clearExpiredAuthArtifacts !== 'function') return;
+  const changed = user.clearExpiredAuthArtifacts(new Date());
+  if (changed) {
+    await user.save();
+  }
+};
+
 /**
  * Register a new user
  * POST /api/auth/register
@@ -305,6 +313,8 @@ const login = asyncHandler(async (req, res, next) => {
     return next(new ApiError(401, 'Invalid email or password'));
   }
 
+  await cleanupUserAuthArtifacts(user);
+
   // Check password
   const isPasswordValid = await bcrypt.compare(password, user.password);
   if (!isPasswordValid) {
@@ -393,6 +403,8 @@ const forgotPassword = asyncHandler(async (req, res, next) => {
     return next(new ApiError(404, 'User not found'));
   }
 
+  await cleanupUserAuthArtifacts(user);
+
   await issuePasswordResetChallenge(user);
 
   res.status(200).json(
@@ -411,6 +423,8 @@ const resendResetPassword = asyncHandler(async (req, res, next) => {
   if (!user) {
     return next(new ApiError(404, 'User not found'));
   }
+
+  await cleanupUserAuthArtifacts(user);
 
   await issuePasswordResetChallenge(user);
 
@@ -434,6 +448,8 @@ const resetPassword = asyncHandler(async (req, res, next) => {
   if (!user) {
     return next(new ApiError(404, 'User not found'));
   }
+
+  await cleanupUserAuthArtifacts(user);
 
   const now = Date.now();
   let valid = false;
@@ -488,6 +504,8 @@ const verifyResetToken = asyncHandler(async (req, res, next) => {
     return res.redirect(`${frontendUrl}/reset-password?status=error&reason=user_not_found&message=User not found`);
   }
 
+  await cleanupUserAuthArtifacts(user);
+
   const now = Date.now();
   if (!user.passwordResetTokenHash || !user.passwordResetTokenExpiresAt || user.passwordResetTokenExpiresAt.getTime() <= now) {
     setNoStoreHeaders(res);
@@ -515,6 +533,8 @@ const verifyEmail = asyncHandler(async (req, res, next) => {
   if (!user) {
     return res.redirect(`${frontendUrl}/email-verified?status=error&message=User not found`);
   }
+
+  await cleanupUserAuthArtifacts(user);
 
   if (user.emailVerifiedAt) {
     return res.redirect(`${frontendUrl}/email-verified?status=success&message=Email already verified`);
@@ -567,6 +587,8 @@ const refreshToken = asyncHandler(async (req, res, next) => {
   if (!user) {
     return next(new ApiError(401, 'Refresh token invalid'));
   }
+
+  await cleanupUserAuthArtifacts(user);
 
   const incomingTokenHash = hashValue(token);
   const now = Date.now();
@@ -711,6 +733,8 @@ const resendVerificationEmail = asyncHandler(async (req, res, next) => {
   if (!user) {
     return next(new ApiError(404, 'User not found'));
   }
+
+  await cleanupUserAuthArtifacts(user);
 
   if (user.emailVerifiedAt) {
     return res.status(400).json(

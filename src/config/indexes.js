@@ -58,6 +58,11 @@ const ensureIndexes = async () => {
     await User.collection.createIndex({ isActive: 1 });
     await User.collection.createIndex({ role: 1 });
     await User.collection.createIndex({ refreshTokenHash: 1 }, { sparse: true });
+    await User.collection.createIndex({ emailVerificationTokenExpiresAt: 1 }, { sparse: true });
+    await User.collection.createIndex({ passwordResetTokenExpiresAt: 1 }, { sparse: true });
+    await User.collection.createIndex({ passwordResetOtpExpiresAt: 1 }, { sparse: true });
+    await User.collection.createIndex({ previousRefreshTokenValidUntil: 1 }, { sparse: true });
+    await User.collection.createIndex({ 'refreshSessions.expiresAt': 1 }, { sparse: true });
 
     // AIGenerationLog indexes
     await AIGenerationLog.collection.createIndex({ universityId: 1 });

@@ -76,6 +76,22 @@ backend/
 ✅ Request logging (Morgan)  
 ✅ Production-ready structure  
 
+## Maintenance Scripts
+
+Bulk verify already-created emails:
+
+```bash
+npm run verify:emails:dry
+npm run verify:emails
+```
+
+Backfill auth-expiry cleanup indexes and remove expired auth artifacts:
+
+```bash
+npm run migrate:auth-cleanup:dry
+npm run migrate:auth-cleanup
+```
+
 ## Error Handling
 
 All errors are handled globally through centralized middleware. Responses follow this format:
