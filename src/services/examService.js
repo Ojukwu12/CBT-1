@@ -17,9 +17,9 @@ class ExamService {
     }
 
     const limitsByPlan = {
-      free: 120,
-      basic: 200,
-      premium: 250,
+      free: 200,
+      basic: 350,
+      premium: 550,
     };
 
     return limitsByPlan[user.plan] ?? limitsByPlan.free;
