@@ -56,9 +56,19 @@ const updateTopic = [
   })
 ];
 
+const deleteTopic = asyncHandler(async (req, res) => {
+  const topic = await topicService.deleteTopic(req.params.id);
+  res.status(200).json({
+    success: true,
+    data: topic,
+    message: 'Topic deleted successfully',
+  });
+});
+
 module.exports = {
   createTopic,
   getTopic,
   listTopicsByCourse,
   updateTopic,
+  deleteTopic,
 };

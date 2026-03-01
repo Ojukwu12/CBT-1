@@ -60,9 +60,22 @@ const updateTopic = async (id, updateData) => {
   return topic;
 };
 
+const deleteTopic = async (id) => {
+  const topic = await Topic.findByIdAndDelete(id);
+
+  if (!topic) {
+    throw new ApiError(404, 'Topic not found');
+  }
+
+  await cacheService.delByPrefix('topics:');
+
+  return topic;
+};
+
 module.exports = {
   createTopic,
   getTopicById,
   getTopicsByCourse,
   updateTopic,
+  deleteTopic,
 };

@@ -7,5 +7,6 @@ router.post('/', topicController.createTopic);
 router.get('/', topicController.listTopicsByCourse);
 router.get('/:id', topicController.getTopic);
 router.put('/:id', topicController.updateTopic);
+router.delete('/:id', topicController.deleteTopic);
 
 module.exports = router;
