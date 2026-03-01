@@ -66,8 +66,8 @@ const getAuthRefreshIdentityKey = (req) => {
   return getAuthIdentityKey(req);
 };
 // Different limiters for different endpoints
-const authLimiter = createRateLimiter(15* 60 * 60 * 1000, 8, {
-  message: 'Too many authentication attempts. Please try again in 1hr minutes.',
+const authLimiter = createRateLimiter(7* 60  * 1000, 10, {
+  message: 'Too many authentication attempts. Please try again in seven minutes.',
   keyGenerator: getAuthIdentityKey,
 });
 const authRefreshLimiter = createRateLimiter(15 * 60 * 1000, 60, {
