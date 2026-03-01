@@ -184,6 +184,56 @@ const setNoStoreHeaders = (res) => {
   res.set('Expires', '0');
 };
 
+const isProgrammaticRequest = (req) => {
+  const requestedWith = req.get('x-requested-with');
+  if (typeof requestedWith === 'string' && requestedWith.toLowerCase() === 'xmlhttprequest') {
+    return true;
+  }
+
+  const secFetchMode = req.get('sec-fetch-mode');
+  if (typeof secFetchMode === 'string' && secFetchMode.toLowerCase() === 'cors') {
+    return true;
+  }
+
+  const acceptHeader = req.get('accept') || '';
+  return acceptHeader.includes('application/json');
+};
+
+const buildEmailVerificationRedirectUrl = (frontendUrl, { status, message, reason, email }) => {
+  const params = new URLSearchParams({
+    status,
+    message,
+  });
+
+  if (reason) {
+    params.set('reason', reason);
+  }
+
+  if (email) {
+    params.set('email', email);
+  }
+
+  return `${frontendUrl}/email-verified?${params.toString()}`;
+};
+
+const respondEmailVerification = (req, res, frontendUrl, payload) => {
+  const redirectUrl = buildEmailVerificationRedirectUrl(frontendUrl, payload);
+  setNoStoreHeaders(res);
+
+  if (isProgrammaticRequest(req)) {
+    return res.status(200).json(
+      new ApiResponse(200, {
+        status: payload.status,
+        reason: payload.reason || null,
+        email: payload.email || null,
+        redirectUrl,
+      }, payload.message)
+    );
+  }
+
+  return res.redirect(redirectUrl);
+};
+
 const issuePasswordResetChallenge = async (user) => {
   const resetToken = crypto.randomBytes(32).toString('hex');
   const resetOtp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -531,22 +581,38 @@ const verifyEmail = asyncHandler(async (req, res, next) => {
 
   const user = await User.findOne({ email }).select('+emailVerificationTokenHash');
   if (!user) {
-    return res.redirect(`${frontendUrl}/email-verified?status=error&message=User not found`);
+    return respondEmailVerification(req, res, frontendUrl, {
+      status: 'error',
+      message: 'User not found',
+    });
   }
 
   await cleanupUserAuthArtifacts(user);
 
   if (user.emailVerifiedAt) {
-    return res.redirect(`${frontendUrl}/email-verified?status=success&message=Email already verified`);
+    return respondEmailVerification(req, res, frontendUrl, {
+      status: 'success',
+      message: 'Email already verified',
+    });
   }
 
   const now = Date.now();
   if (!user.emailVerificationTokenHash || !user.emailVerificationTokenExpiresAt || user.emailVerificationTokenExpiresAt.getTime() <= now) {
-    return res.redirect(`${frontendUrl}/email-verified?status=error&reason=expired&message=Verification link expired. Request a new verification email.&email=${encodeURIComponent(email)}`);
+    return respondEmailVerification(req, res, frontendUrl, {
+      status: 'error',
+      reason: 'expired',
+      message: 'Verification link expired. Request a new verification email.',
+      email,
+    });
   }
 
   if (hashValue(token) !== user.emailVerificationTokenHash) {
-    return res.redirect(`${frontendUrl}/email-verified?status=error&reason=invalid_token&message=Invalid verification token. Request a new verification email.&email=${encodeURIComponent(email)}`);
+    return respondEmailVerification(req, res, frontendUrl, {
+      status: 'error',
+      reason: 'invalid_token',
+      message: 'Invalid verification token. Request a new verification email.',
+      email,
+    });
   }
 
   user.emailVerifiedAt = new Date();
@@ -555,7 +621,10 @@ const verifyEmail = asyncHandler(async (req, res, next) => {
   await user.save();
 
   logger.info(`Email verified successfully for user: ${email}`);
-  res.redirect(`${frontendUrl}/email-verified?status=success&message=Email verified successfully`);
+  return respondEmailVerification(req, res, frontendUrl, {
+    status: 'success',
+    message: 'Email verified successfully',
+  });
 });
 
 /**
