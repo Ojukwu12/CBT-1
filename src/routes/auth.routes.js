@@ -78,6 +78,7 @@ router.post(
  */
 router.get(
   '/reset-password',
+  authLimiter,
   authController.verifyResetToken
 );
 
@@ -87,6 +88,7 @@ router.get(
  */
 router.get(
   '/verify-email',
+  authLimiter,
   validate(verifyEmailQuerySchema, 'query'),
   authController.verifyEmail
 );

@@ -1,4 +1,5 @@
 const rateLimit = require('express-rate-limit');
+const jwt = require('jsonwebtoken');
 
 const createRateLimiter = (windowMs = 15 * 60 * 1000, maxRequests = 100, options = {}) => {
   return rateLimit({
@@ -12,12 +13,66 @@ const createRateLimiter = (windowMs = 15 * 60 * 1000, maxRequests = 100, options
   });
 };
 
+
+const normalizeIdentifier = (value) => {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim().toLowerCase();
+  return normalized || null;
+};
+
+const getUserIdFromRefreshToken = (req) => {
+  const headerValue = req.headers?.authorization;
+  const headerToken = typeof headerValue === 'string' ? headerValue.split(' ')[1] : null;
+
+  const refreshToken = req.cookies?.refreshToken
+    || req.cookies?.refresh_token
+    || req.headers?.['x-refresh-token']
+    || req.body?.refreshToken
+    || req.body?.refresh_token
+    || req.body?.token
+    || headerToken;
+
+  if (typeof refreshToken !== 'string' || !refreshToken.trim()) return null;
+
+  try {
+    const payload = jwt.decode(refreshToken.trim());
+    const userId = payload?.id || payload?.sub;
+    return normalizeIdentifier(String(userId || ''));
+  } catch (error) {
+    return null;
+  }
+};
+
+const getAuthIdentityKey = (req) => {
+  const userId = normalizeIdentifier(String(req.user?.id || req.user?._id || ''));
+  if (userId) {
+    return `user:${userId}`;
+  }
+
+  const email = normalizeIdentifier(req.body?.email || req.query?.email);
+  if (email) {
+    return `email:${email}`;
+  }
+
+  return `ip:${req.ip}`;
+};
+
+const getAuthRefreshIdentityKey = (req) => {
+  const userId = getUserIdFromRefreshToken(req);
+  if (userId) {
+    return `user:${userId}`;
+  }
+
+  return getAuthIdentityKey(req);
+};
 // Different limiters for different endpoints
-const authLimiter = createRateLimiter(15 * 60 * 1000, 8, {
-  message: 'Too many authentication attempts. Please try again in 15 minutes.',
+const authLimiter = createRateLimiter(15* 60 * 60 * 1000, 8, {
+  message: 'Too many authentication attempts. Please try again in 1hr minutes.',
+  keyGenerator: getAuthIdentityKey,
 });
 const authRefreshLimiter = createRateLimiter(15 * 60 * 1000, 60, {
   message: 'Too many token refresh requests. Please try again shortly.',
+  keyGenerator: getAuthRefreshIdentityKey,
 });
 
 const adminReadLimiter = createRateLimiter(5 * 60 * 1000, 300, {
