@@ -94,6 +94,7 @@ const userSchema = new mongoose.Schema(
       select: false,
     },
     emailVerificationTokenExpiresAt: Date,
+    lastVerificationEmailSentAt: Date,
     passwordResetTokenHash: {
       type: String,
       select: false,
@@ -104,6 +105,8 @@ const userSchema = new mongoose.Schema(
       select: false,
     },
     passwordResetOtpExpiresAt: Date,
+    lastPasswordResetEmailSentAt: Date,
+    welcomeEmailSentAt: Date,
     refreshTokenHash: {
       type: String,
       select: false,
@@ -159,6 +162,7 @@ userSchema.index({ emailVerificationTokenExpiresAt: 1 }, { sparse: true });
 userSchema.index({ passwordResetTokenExpiresAt: 1 }, { sparse: true });
 userSchema.index({ passwordResetOtpExpiresAt: 1 }, { sparse: true });
 userSchema.index({ previousRefreshTokenValidUntil: 1 }, { sparse: true });
+userSchema.index({ welcomeEmailSentAt: 1 }, { sparse: true });
 
 const clearExpiredAuthArtifactsInDoc = (user, now = new Date()) => {
   const nowMs = now.getTime();

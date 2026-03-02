@@ -21,6 +21,9 @@ Update `.env` file:
 PORT=3000
 MONGO_URI=mongodb://localhost:27017/mydb
 NODE_ENV=development
+EMAIL_REQUEST_COOLDOWN_MINUTES=10
+DAILY_WELCOME_EMAIL_LIMIT=10
+WELCOME_EMAIL_RANDOM_RATE=0.35
 ```
 
 ### Running the Server
@@ -90,6 +93,13 @@ Backfill auth-expiry cleanup indexes and remove expired auth artifacts:
 ```bash
 npm run migrate:auth-cleanup:dry
 npm run migrate:auth-cleanup
+```
+
+Backfill newly added email-throttle fields for existing users:
+
+```bash
+npm run migrate:email-throttle:dry
+npm run migrate:email-throttle
 ```
 
 ## Error Handling

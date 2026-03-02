@@ -16,6 +16,12 @@ const REFRESH_TOKEN_ROTATION_GRACE_SECONDS = Math.max(0, env.REFRESH_TOKEN_ROTAT
 const REFRESH_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60;
 const REFRESH_TOKEN_TTL = `${REFRESH_TOKEN_TTL_SECONDS}s`;
 const MAX_REFRESH_SESSIONS_PER_USER = 10;
+const EMAIL_REQUEST_COOLDOWN_MS = Math.max(1, Number(env.EMAIL_REQUEST_COOLDOWN_MINUTES) || 10) * 60 * 1000;
+const DAILY_WELCOME_EMAIL_LIMIT = Math.max(0, Number(env.DAILY_WELCOME_EMAIL_LIMIT) || 10);
+const configuredWelcomeRandomRate = Number(env.WELCOME_EMAIL_RANDOM_RATE);
+const WELCOME_EMAIL_RANDOM_RATE = Number.isFinite(configuredWelcomeRandomRate)
+  ? Math.max(0, Math.min(1, configuredWelcomeRandomRate))
+  : 0.35;
 
 const resolveRefreshCookieSecure = () => {
   if (typeof env.REFRESH_TOKEN_COOKIE_SECURE === 'boolean') {
@@ -161,11 +167,21 @@ const buildAuthTokenPayload = ({ accessToken, refreshToken }) => ({
   token: accessToken,
 });
 
-const buildResendVerificationMeta = (email) => ({
+const buildResendVerificationMeta = (email, overrides = {}) => ({
   email,
   canResendVerification: true,
   resendVerificationEndpoint: '/api/auth/resend-verification-email',
+  ...overrides,
 });
+
+const getCooldownRemainingSeconds = (lastSentAt, cooldownMs = EMAIL_REQUEST_COOLDOWN_MS) => {
+  if (!lastSentAt) return 0;
+
+  const elapsed = Date.now() - new Date(lastSentAt).getTime();
+  if (elapsed >= cooldownMs) return 0;
+
+  return Math.ceil((cooldownMs - elapsed) / 1000);
+};
 
 const buildFrontendVerificationLink = (email, verifyToken) => {
   const frontendBase = env.FRONTEND_URL || 'http://localhost:5173';
@@ -235,6 +251,14 @@ const respondEmailVerification = (req, res, frontendUrl, payload) => {
 };
 
 const issuePasswordResetChallenge = async (user) => {
+  const cooldownRemainingSeconds = getCooldownRemainingSeconds(user.lastPasswordResetEmailSentAt);
+  if (cooldownRemainingSeconds > 0) {
+    return {
+      sent: false,
+      cooldownRemainingSeconds,
+    };
+  }
+
   const resetToken = crypto.randomBytes(32).toString('hex');
   const resetOtp = Math.floor(100000 + Math.random() * 900000).toString();
 
@@ -252,6 +276,71 @@ const issuePasswordResetChallenge = async (user) => {
     resetLink,
     expiresInMinutes: 60,
   });
+
+  user.lastPasswordResetEmailSentAt = new Date();
+  await user.save();
+
+  return {
+    sent: true,
+    cooldownRemainingSeconds: 0,
+  };
+};
+
+const sendVerificationEmailChallenge = async (user) => {
+  const cooldownRemainingSeconds = getCooldownRemainingSeconds(user.lastVerificationEmailSentAt);
+  if (cooldownRemainingSeconds > 0) {
+    return {
+      sent: false,
+      cooldownRemainingSeconds,
+    };
+  }
+
+  const verifyToken = crypto.randomBytes(32).toString('hex');
+  const verifyTokenExpiresAt = new Date(Date.now() + (env.EMAIL_VERIFICATION_TOKEN_TTL_MINUTES || 60) * 60 * 1000);
+
+  user.emailVerificationTokenHash = hashValue(verifyToken);
+  user.emailVerificationTokenExpiresAt = verifyTokenExpiresAt;
+  await user.save();
+
+  const verifyLink = buildFrontendVerificationLink(user.email, verifyToken);
+  const result = await emailService.sendEmailVerificationLink(user, {
+    verifyLink,
+    expiresInMinutes: env.EMAIL_VERIFICATION_TOKEN_TTL_MINUTES || 60,
+  });
+
+  if (result.success) {
+    user.lastVerificationEmailSentAt = new Date();
+    await user.save();
+  }
+
+  return {
+    sent: result.success,
+    cooldownRemainingSeconds: 0,
+  };
+};
+
+const maybeSendWelcomeEmail = async (user) => {
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+
+  const sentToday = await User.countDocuments({
+    welcomeEmailSentAt: { $gte: startOfDay },
+  });
+
+  if (sentToday >= DAILY_WELCOME_EMAIL_LIMIT) {
+    logger.info(`Welcome email skipped for ${user.email}: daily cap reached (${DAILY_WELCOME_EMAIL_LIMIT})`);
+    return false;
+  }
+
+  if (Math.random() >= WELCOME_EMAIL_RANDOM_RATE) {
+    logger.info(`Welcome email skipped for ${user.email}: random gate not selected`);
+    return false;
+  }
+
+  await emailService.sendWelcomeEmail(user);
+  user.welcomeEmailSentAt = new Date();
+  await user.save();
+  return true;
 };
 
 const cleanupUserAuthArtifacts = async (user) => {
@@ -278,9 +367,6 @@ const register = asyncHandler(async (req, res, next) => {
   // Hash password
   const hashedPassword = await bcrypt.hash(password, 10);
 
-  const verifyToken = crypto.randomBytes(32).toString('hex');
-  const verifyTokenExpiresAt = new Date(Date.now() + (env.EMAIL_VERIFICATION_TOKEN_TTL_MINUTES || 60) * 60 * 1000);
-
   // Create user (no universityId - users select university when taking exams)
   const user = new User({
     firstName,
@@ -290,34 +376,28 @@ const register = asyncHandler(async (req, res, next) => {
     role: 'student',
     plan: 'free',
     isActive: true,
-    emailVerificationTokenHash: hashValue(verifyToken),
-    emailVerificationTokenExpiresAt: verifyTokenExpiresAt,
   });
 
   await user.save();
 
-  const verifyLink = buildFrontendVerificationLink(email, verifyToken);
-
   // Send verification email
   let emailSent = false;
+  let verificationEmailCooldownSeconds = 0;
   try {
-    const result = await emailService.sendEmailVerificationLink(user, {
-      verifyLink,
-      expiresInMinutes: env.EMAIL_VERIFICATION_TOKEN_TTL_MINUTES || 60,
-    });
-    emailSent = result.success;
+    const result = await sendVerificationEmailChallenge(user);
+    emailSent = result.sent;
+    verificationEmailCooldownSeconds = result.cooldownRemainingSeconds;
     logger.info(`Verification email sent to ${email}: ${emailSent}`);
   } catch (err) {
     logger.error('Verification email failed:', err);
     logger.error('Error details:', { message: err.message, stack: err.stack });
   }
 
-  // Send welcome email
+  // Send welcome email to random users only, capped daily
   try {
-    await emailService.sendWelcomeEmail(user);
+    await maybeSendWelcomeEmail(user);
   } catch (err) {
     logger.error('Welcome email failed:', err);
-    // Don't fail registration if email fails
   }
 
   // Generate token
@@ -346,6 +426,7 @@ const register = asyncHandler(async (req, res, next) => {
       token,
       expiresIn: env.JWT_ACCESS_TOKEN_TTL,
       verificationEmailSent: emailSent,
+      verificationEmailCooldownSeconds,
     }, emailSent ? 'User registered successfully. Verification email sent.' : 'User registered successfully. Please check spam folder or resend verification email.')
   );
 });
@@ -378,10 +459,27 @@ const login = asyncHandler(async (req, res, next) => {
 
   // Block login until email is verified
   if (!user.emailVerifiedAt) {
+    let verificationEmailSent = false;
+    let verificationEmailCooldownSeconds = 0;
+
+    try {
+      const verificationResult = await sendVerificationEmailChallenge(user);
+      verificationEmailSent = verificationResult.sent;
+      verificationEmailCooldownSeconds = verificationResult.cooldownRemainingSeconds;
+    } catch (err) {
+      logger.error(`Auto verification email failed during login for ${email}:`, err);
+    }
+
     return next(new ApiError(
       403,
       'Email not verified. Please verify your email before logging in.',
-      buildResendVerificationMeta(user.email)
+      {
+        ...buildResendVerificationMeta(user.email, {
+          canResendVerification: verificationEmailCooldownSeconds === 0,
+        }),
+        verificationEmailSent,
+        verificationEmailCooldownSeconds,
+      }
     ));
   }
 
@@ -455,7 +553,14 @@ const forgotPassword = asyncHandler(async (req, res, next) => {
 
   await cleanupUserAuthArtifacts(user);
 
-  await issuePasswordResetChallenge(user);
+  const result = await issuePasswordResetChallenge(user);
+  if (!result.sent) {
+    return next(new ApiError(429, 'Please wait before requesting another password reset email', {
+      email: user.email,
+      resetEmailCooldownSeconds: result.cooldownRemainingSeconds,
+      resendResetPasswordEndpoint: '/api/auth/resend-reset-password',
+    }));
+  }
 
   res.status(200).json(
     new ApiResponse(200, null, 'Password reset email sent')
@@ -476,7 +581,14 @@ const resendResetPassword = asyncHandler(async (req, res, next) => {
 
   await cleanupUserAuthArtifacts(user);
 
-  await issuePasswordResetChallenge(user);
+  const result = await issuePasswordResetChallenge(user);
+  if (!result.sent) {
+    return next(new ApiError(429, 'Please wait before requesting another password reset email', {
+      email: user.email,
+      resetEmailCooldownSeconds: result.cooldownRemainingSeconds,
+      resendResetPasswordEndpoint: '/api/auth/resend-reset-password',
+    }));
+  }
 
   res.status(200).json(
     new ApiResponse(200, {
@@ -811,26 +923,18 @@ const resendVerificationEmail = asyncHandler(async (req, res, next) => {
     );
   }
 
-  // Generate new verification token
-  const verifyToken = crypto.randomBytes(32).toString('hex');
-  const verifyTokenExpiresAt = new Date(Date.now() + (env.EMAIL_VERIFICATION_TOKEN_TTL_MINUTES || 60) * 60 * 1000);
-
-  user.emailVerificationTokenHash = hashValue(verifyToken);
-  user.emailVerificationTokenExpiresAt = verifyTokenExpiresAt;
-  await user.save();
-
-  const verifyLink = buildFrontendVerificationLink(email, verifyToken);
-
-  // Send verification email
   try {
-    const result = await emailService.sendEmailVerificationLink(user, {
-      verifyLink,
-      expiresInMinutes: env.EMAIL_VERIFICATION_TOKEN_TTL_MINUTES || 60,
-    });
-    logger.info(`Verification email resent to ${email}: ${result.success}`);
-    if (result.isDev) {
-      logger.warn('Running in DEV MODE - email not actually sent via Brevo');
+    const result = await sendVerificationEmailChallenge(user);
+    if (!result.sent) {
+      return next(new ApiError(429, 'Please wait before requesting another verification email', {
+        ...buildResendVerificationMeta(email, {
+          canResendVerification: false,
+        }),
+        verificationEmailCooldownSeconds: result.cooldownRemainingSeconds,
+      }));
     }
+
+    logger.info(`Verification email resent to ${email}: ${result.sent}`);
   } catch (err) {
     logger.error('Failed to resend verification email:', err);
     logger.error('Error details:', { message: err.message, stack: err.stack });

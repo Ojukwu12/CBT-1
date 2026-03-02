@@ -11,7 +11,9 @@
     "verify:emails": "node scripts/verify-existing-emails.js",
     "verify:emails:dry": "node scripts/verify-existing-emails.js --dry-run",
     "migrate:auth-cleanup": "node scripts/migrate-auth-expiry-cleanup.js",
-    "migrate:auth-cleanup:dry": "node scripts/migrate-auth-expiry-cleanup.js --dry-run"
+    "migrate:auth-cleanup:dry": "node scripts/migrate-auth-expiry-cleanup.js --dry-run",
+    "migrate:email-throttle": "node scripts/migrate-email-throttle-fields.js",
+    "migrate:email-throttle:dry": "node scripts/migrate-email-throttle-fields.js --dry-run"
   },
   "keywords": [],
   "author": "",
