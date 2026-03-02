@@ -38,9 +38,15 @@ const getAllUsers = asyncHandler(async (req, res) => {
     .limit(parseInt(limit))
     .sort({ createdAt: -1 });
 
+  const normalizedUsers = users.map((user) => {
+    const userData = user.toObject();
+    userData.isEmailVerified = Boolean(user.emailVerifiedAt);
+    return userData;
+  });
+
   res.status(200).json(
     new ApiResponse(200, {
-      users,
+      users: normalizedUsers,
       pagination: {
         total,
         page: parseInt(page),
@@ -63,8 +69,11 @@ const getUser = asyncHandler(async (req, res) => {
     throw new ApiError(404, 'User not found');
   }
 
+  const userData = user.toObject();
+  userData.isEmailVerified = Boolean(user.emailVerifiedAt);
+
   res.status(200).json(
-    new ApiResponse(200, user, 'User retrieved successfully')
+    new ApiResponse(200, userData, 'User retrieved successfully')
   );
 });
 
