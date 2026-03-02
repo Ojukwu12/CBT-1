@@ -100,10 +100,9 @@ app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 // Root route (service status)
 app.get('/', (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: 'CBT backend is running',
-    timestamp: new Date().toISOString(),
+  res.status(404).json({
+    success: false,
+    message: 'Route / not found',
   });
 });
 
