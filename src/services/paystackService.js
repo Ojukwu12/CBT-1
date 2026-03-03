@@ -47,7 +47,7 @@ class PaystackService {
           name: 'Free',
           price: 0,
           duration: null,
-          features: ['10 questions/exam', 'Free questions only'],
+          features: ['50 questions/day per course', 'Free questions only'],
         },
       };
 
@@ -76,7 +76,7 @@ class PaystackService {
         name: 'Free',
         price: 0,
         duration: null,
-        features: ['10 questions/day', 'Free questions only'],
+        features: ['50 questions/day per course', 'Free questions only'],
       },
       basic: {
         name: 'Basic',

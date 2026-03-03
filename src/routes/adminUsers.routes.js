@@ -69,6 +69,10 @@ router.post('/:userId/change-plan', verifyToken, isAdmin, adminWriteLimiter, val
 // Legacy endpoint for backward compatibility
 router.post('/:userId/downgrade-plan', verifyToken, isAdmin, adminWriteLimiter, validate(userIdSchema, 'params'), validate(downgradePlanSchema), AdminUserController.downgradePlan);
 
+router.post('/:userId/verify-email', verifyToken, isAdmin, adminWriteLimiter, validate(userIdSchema, 'params'), AdminUserController.verifyUserEmail);
+router.post('/verify-all-unverified-emails', verifyToken, isAdmin, adminWriteLimiter, AdminUserController.verifyAllUnverifiedEmails);
+router.delete('/:userId/permanent-delete', verifyToken, isAdmin, adminWriteLimiter, validate(userIdSchema, 'params'), AdminUserController.permanentlyDeleteNonAdminUser);
+
 router.post('/:userId/send-notification', verifyToken, isAdmin, adminWriteLimiter, validate(userIdSchema, 'params'), validate(sendNotificationSchema), AdminUserController.sendNotificationToUser);
 
 module.exports = router;

@@ -516,6 +516,150 @@ const getPlanHistory = asyncHandler(async (req, res) => {
 });
 
 /**
+ * Verify a single user's email
+ * POST /api/admin/users/:userId/verify-email
+ */
+const verifyUserEmail = asyncHandler(async (req, res) => {
+  const { userId } = req.params;
+
+  const user = await User.findById(userId).select('-password +emailVerificationTokenHash');
+  if (!user) {
+    throw new ApiError(404, 'User not found');
+  }
+
+  if (user.emailVerifiedAt) {
+    return res.status(200).json(
+      new ApiResponse(200, {
+        userId: user._id,
+        email: user.email,
+        emailVerifiedAt: user.emailVerifiedAt,
+        alreadyVerified: true,
+      }, 'User email is already verified')
+    );
+  }
+
+  user.emailVerifiedAt = new Date();
+  user.emailVerificationTokenHash = undefined;
+  user.emailVerificationTokenExpiresAt = undefined;
+  await user.save();
+
+  await auditLogService.log('admin_action', user._id, {
+    performedBy: req.user.id,
+    ipAddress: req.ip || req.connection.remoteAddress,
+    userAgent: req.get('user-agent') || null,
+    resourceType: 'User',
+    resourceId: String(user._id),
+    details: {
+      actionType: 'verify_user_email',
+      email: user.email,
+    },
+  });
+
+  res.status(200).json(
+    new ApiResponse(200, {
+      userId: user._id,
+      email: user.email,
+      emailVerifiedAt: user.emailVerifiedAt,
+      alreadyVerified: false,
+    }, 'User email verified successfully')
+  );
+});
+
+/**
+ * Verify all unverified user emails
+ * POST /api/admin/users/verify-all-unverified-emails
+ */
+const verifyAllUnverifiedEmails = asyncHandler(async (req, res) => {
+  const now = new Date();
+  const unverifiedQuery = {
+    $or: [
+      { emailVerifiedAt: null },
+      { emailVerifiedAt: { $exists: false } },
+    ],
+  };
+
+  const totalUnverifiedBefore = await User.countDocuments(unverifiedQuery);
+
+  const result = await User.updateMany(
+    unverifiedQuery,
+    {
+      $set: { emailVerifiedAt: now },
+      $unset: {
+        emailVerificationTokenHash: 1,
+        emailVerificationTokenExpiresAt: 1,
+      },
+    }
+  );
+
+  await auditLogService.log('admin_action', req.user.id, {
+    performedBy: req.user.id,
+    ipAddress: req.ip || req.connection.remoteAddress,
+    userAgent: req.get('user-agent') || null,
+    resourceType: 'User',
+    resourceId: 'bulk-email-verification',
+    details: {
+      actionType: 'verify_all_unverified_emails',
+      totalUnverifiedBefore,
+      matchedCount: result.matchedCount,
+      modifiedCount: result.modifiedCount,
+    },
+  });
+
+  res.status(200).json(
+    new ApiResponse(200, {
+      totalUnverifiedBefore,
+      matchedCount: result.matchedCount,
+      modifiedCount: result.modifiedCount,
+      verifiedAt: now,
+    }, 'All unverified user emails verified successfully')
+  );
+});
+
+/**
+ * Permanently delete a non-admin user account
+ * DELETE /api/admin/users/:userId/permanent-delete
+ */
+const permanentlyDeleteNonAdminUser = asyncHandler(async (req, res) => {
+  const { userId } = req.params;
+
+  const user = await User.findById(userId).select('-password');
+  if (!user) {
+    throw new ApiError(404, 'User not found');
+  }
+
+  if (user.role === 'admin') {
+    throw new ApiError(403, 'Admin accounts cannot be permanently deleted with this endpoint');
+  }
+
+  const deletedUserId = user._id;
+  const deletedUserEmail = user.email;
+
+  await User.deleteOne({ _id: userId, role: { $ne: 'admin' } });
+
+  await auditLogService.log('admin_action', deletedUserId, {
+    performedBy: req.user.id,
+    ipAddress: req.ip || req.connection.remoteAddress,
+    userAgent: req.get('user-agent') || null,
+    resourceType: 'User',
+    resourceId: String(deletedUserId),
+    details: {
+      actionType: 'permanent_delete_non_admin_user',
+      email: deletedUserEmail,
+    },
+  });
+
+  logger.warn(`User permanently deleted by admin ${req.user.id}: ${deletedUserEmail} (${deletedUserId})`);
+
+  res.status(200).json(
+    new ApiResponse(200, {
+      deleted: true,
+      userId: deletedUserId,
+      email: deletedUserEmail,
+    }, 'User permanently deleted successfully')
+  );
+});
+
+/**
  * Get current admin user's profile
  * GET /api/admin/users/me
  */
@@ -537,5 +681,8 @@ module.exports = {
   downgradePlan,
   sendNotificationToUser,
   getPlanHistory,
+  verifyUserEmail,
+  verifyAllUnverifiedEmails,
+  permanentlyDeleteNonAdminUser,
   getMe,
 };

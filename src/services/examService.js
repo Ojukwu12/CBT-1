@@ -17,7 +17,7 @@ class ExamService {
     }
 
     const limitsByPlan = {
-      free: 200,
+      free: 50,
       basic: 350,
       premium: 550,
     };
@@ -90,19 +90,26 @@ class ExamService {
         dailyLimit: null,
         usedToday: 0,
         remainingToday: null,
+        isLimitReached: false,
+        overLimitBy: 0,
         resetsAt: dayEnd,
         scope: 'per_course',
       };
     }
 
-    const usedToday = await ExamService.getCourseDailyUsage(userId, courseId, { dayStart, dayEnd });
+    const usedTodayRaw = await ExamService.getCourseDailyUsage(userId, courseId, { dayStart, dayEnd });
+    const usedToday = Math.max(usedTodayRaw, 0);
     const remainingToday = Math.max(dailyLimit - usedToday, 0);
+    const isLimitReached = remainingToday <= 0;
+    const overLimitBy = Math.max(usedToday - dailyLimit, 0);
 
     return {
       userTier: currentUser.plan,
       dailyLimit,
       usedToday,
       remainingToday,
+      isLimitReached,
+      overLimitBy,
       resetsAt: dayEnd,
       scope: 'per_course',
     };
@@ -201,6 +208,8 @@ class ExamService {
         dailyLimit,
         usedToday: questionsUsedTodayForCourse,
         remainingToday: 0,
+        isLimitReached: true,
+        overLimitBy: Math.max(questionsUsedTodayForCourse - dailyLimit, 0),
         resetsAt: dailyLimitStatus.resetsAt,
         scope: 'per_course'
       });
@@ -701,6 +710,8 @@ class ExamService {
       dailyLimit: status.dailyLimit,
       usedToday: status.usedToday,
       remainingToday: status.remainingToday,
+      isLimitReached: status.isLimitReached,
+      overLimitBy: status.overLimitBy,
       used: status.usedToday,
       remaining: status.remainingToday,
       resetsAt: status.resetsAt,
