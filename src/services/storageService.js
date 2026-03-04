@@ -183,10 +183,10 @@ const generatePresignedUrl = async ({ fileUrl, expiresIn = 300, fileName, inline
       
 
     if (isAccessDenied) {
-      console.error(error)
+      console.error(error);
       throw new ApiError(
         403,
-        `S3 access denied. Allow s3:GetObject on arn:aws:s3:::${env.S3_BUCKET}/materials/* for the configured IAM user to generate presigned URLs.`, error
+        `S3 access denied. Allow s3:GetObject on arn:aws:s3:::${env.S3_BUCKET}/materials/* for the configured IAM user to generate presigned URLs.`
       );
     }
 
