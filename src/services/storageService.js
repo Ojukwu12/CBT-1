@@ -180,11 +180,13 @@ const generatePresignedUrl = async ({ fileUrl, expiresIn = 300, fileName, inline
       error?.name === 'AccessDenied' ||
       error?.Code === 'AccessDenied' ||
       error?.$metadata?.httpStatusCode === 403;
+      
 
     if (isAccessDenied) {
+      console.error(error)
       throw new ApiError(
         403,
-        `S3 access denied. Ensure s3:GetObject permission is granted on arn:aws:s3:::${env.S3_BUCKET}/materials/* for the configured IAM user.`
+        `S3 access denied. Allow s3:GetObject on arn:aws:s3:::${env.S3_BUCKET}/materials/* for the configured IAM user to generate presigned URLs.`, error
       );
     }
 
