@@ -5,6 +5,23 @@ const ExamSession = require('../models/ExamSession');
 const ApiError = require('../utils/ApiError');
 
 class LeaderboardService {
+  static mapAnalyticsToRankings(analytics) {
+    return analytics
+      .filter((item) => item?.userId?._id)
+      .map((item, index) => ({
+        rank: index + 1,
+        userId: item.userId._id,
+        firstName: item.userId.firstName,
+        lastName: item.userId.lastName,
+        score: item.averageScore,
+        examsCompleted: item.totalExamsCompleted,
+        accuracy: item.accuracyRate,
+        totalQuestions: item.totalQuestionsAttempted,
+        correctAnswers: item.totalCorrectAnswers,
+        streak: item.streaks?.currentStreak || 0
+      }));
+  }
+
   static async getGlobalLeaderboard(limit = 100, page = 1) {
     const skip = (page - 1) * limit;
 
@@ -94,18 +111,7 @@ class LeaderboardService {
       .limit(1000)
       .populate('userId', 'firstName lastName');
 
-    const rankings = analytics.map((a, index) => ({
-      rank: index + 1,
-      userId: a.userId._id,
-      firstName: a.userId.firstName,
-      lastName: a.userId.lastName,
-      score: a.averageScore,
-      examsCompleted: a.totalExamsCompleted,
-      accuracy: a.accuracyRate,
-      totalQuestions: a.totalQuestionsAttempted,
-      correctAnswers: a.totalCorrectAnswers,
-      streak: a.streaks?.currentStreak || 0
-    }));
+    const rankings = this.mapAnalyticsToRankings(analytics);
 
     const board = await Leaderboard.findOneAndUpdate(
       { type: 'global' },
@@ -128,18 +134,7 @@ class LeaderboardService {
       .limit(1000)
       .populate('userId', 'firstName lastName');
 
-    const rankings = analytics.map((a, index) => ({
-      rank: index + 1,
-      userId: a.userId._id,
-      firstName: a.userId.firstName,
-      lastName: a.userId.lastName,
-      score: a.averageScore,
-      examsCompleted: a.totalExamsCompleted,
-      accuracy: a.accuracyRate,
-      totalQuestions: a.totalQuestionsAttempted,
-      correctAnswers: a.totalCorrectAnswers,
-      streak: a.streaks?.currentStreak || 0
-    }));
+    const rankings = this.mapAnalyticsToRankings(analytics);
 
     const board = await Leaderboard.findOneAndUpdate(
       { type: 'university', universityId },
@@ -159,18 +154,7 @@ class LeaderboardService {
       .limit(1000)
       .populate('userId', 'firstName lastName');
 
-    const rankings = analytics.map((a, index) => ({
-      rank: index + 1,
-      userId: a.userId._id,
-      firstName: a.userId.firstName,
-      lastName: a.userId.lastName,
-      score: a.averageScore,
-      examsCompleted: a.totalExamsCompleted,
-      accuracy: a.accuracyRate,
-      totalQuestions: a.totalQuestionsAttempted,
-      correctAnswers: a.totalCorrectAnswers,
-      streak: a.streaks?.currentStreak || 0
-    }));
+    const rankings = this.mapAnalyticsToRankings(analytics);
 
     const board = await Leaderboard.findOneAndUpdate(
       { type: 'course', courseId },
@@ -196,18 +180,7 @@ class LeaderboardService {
       .limit(1000)
       .populate('userId', 'firstName lastName');
 
-    const rankings = analytics.map((a, index) => ({
-      rank: index + 1,
-      userId: a.userId._id,
-      firstName: a.userId.firstName,
-      lastName: a.userId.lastName,
-      score: a.averageScore,
-      examsCompleted: a.totalExamsCompleted,
-      accuracy: a.accuracyRate,
-      totalQuestions: a.totalQuestionsAttempted,
-      correctAnswers: a.totalCorrectAnswers,
-      streak: a.streaks?.currentStreak || 0
-    }));
+    const rankings = this.mapAnalyticsToRankings(analytics);
 
     const board = await Leaderboard.findOneAndUpdate(
       { type: 'monthly', month },
