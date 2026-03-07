@@ -52,6 +52,21 @@ const sendPlanExpiryReminderSchema = Joi.object({
   daysUntilExpiry: Joi.number().optional().default(7),
 });
 
+const sendAppNotificationSchema = Joi.object({
+  title: Joi.string().required().min(3).max(120),
+  message: Joi.string().required().min(3).max(2000),
+  type: Joi.string().valid('general', 'announcement', 'maintenance', 'plan', 'system').default('general'),
+  channels: Joi.array().items(Joi.string().valid('in_app', 'push')).min(1).default(['in_app']),
+  filters: Joi.object({
+    plan: Joi.string().valid('free', 'basic', 'premium').optional(),
+    role: Joi.string().valid('student', 'admin').optional(),
+    universityId: Joi.string().optional(),
+    isActive: Joi.boolean().optional(),
+  }).optional(),
+  data: Joi.object().optional(),
+  expiresAt: Joi.date().allow(null).optional(),
+});
+
 // Analytics Routes
 router.get('/overview', verifyToken, isAdmin, adminReadLimiter, AdminAnalyticsController.getOverviewStats);
 router.get('/users', verifyToken, isAdmin, adminReadLimiter, AdminAnalyticsController.getUserMetrics);
@@ -64,6 +79,7 @@ router.get('/report/:type', verifyToken, isAdmin, adminReadLimiter, validate(rep
 
 // Notification Routes
 router.post('/notifications/send-bulk', verifyToken, isAdmin, adminWriteLimiter, validate(sendBulkEmailSchema), AdminNotificationController.sendBulkEmail);
+router.post('/notifications/send', verifyToken, isAdmin, adminWriteLimiter, validate(sendAppNotificationSchema), AdminNotificationController.sendAppNotification);
 router.post('/notifications/announcement', verifyToken, isAdmin, adminWriteLimiter, validate(sendAnnouncementSchema), AdminNotificationController.sendAnnouncement);
 router.post('/notifications/maintenance', verifyToken, isAdmin, adminWriteLimiter, validate(sendMaintenanceSchema), AdminNotificationController.sendMaintenanceNotification);
 router.post('/notifications/plan-expiry-reminder', verifyToken, isAdmin, adminWriteLimiter, validate(sendPlanExpiryReminderSchema), AdminNotificationController.sendPlanExpiryReminder);

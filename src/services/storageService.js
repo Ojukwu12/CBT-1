@@ -7,6 +7,25 @@ const mime = require('mime-types');
 const { env } = require('../config/env');
 const ApiError = require('../utils/ApiError');
 
+const sanitizeFileName = (input, fallback = 'upload') => {
+  const rawName = String(input || '').trim();
+  const parsedExt = path.extname(rawName || '').toLowerCase();
+  const safeExt = parsedExt.replace(/[^a-z0-9.]/g, '').slice(0, 12);
+
+  const baseName = path.basename(rawName || '', parsedExt || undefined);
+  const normalizedBase = String(baseName || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9\s_-]/g, '-')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^[-_.]+|[-_.]+$/g, '')
+    .slice(0, 120);
+
+  const finalBase = normalizedBase || fallback;
+  return `${finalBase}${safeExt}`;
+};
+
 const getS3Client = () => {
   return new S3Client({
     region: env.S3_REGION,
@@ -27,7 +46,8 @@ const ensureUploadsDir = () => {
 
 const uploadToLocal = async ({ buffer, fileName, mimeType }) => {
   const uploadsDir = ensureUploadsDir();
-  const ext = path.extname(fileName || '') || `.${mime.extension(mimeType) || 'bin'}`;
+  const safeFileName = sanitizeFileName(fileName, 'upload');
+  const ext = path.extname(safeFileName) || `.${mime.extension(mimeType) || 'bin'}`;
   const finalName = `${uuidv4()}${ext}`;
   const filePath = path.join(uploadsDir, finalName);
   await fs.promises.writeFile(filePath, buffer);
@@ -42,7 +62,8 @@ const uploadToS3 = async ({ buffer, fileName, mimeType }) => {
     throw new ApiError(500, 'S3 storage is not fully configured');
   }
 
-  const key = `materials/${uuidv4()}-${fileName || 'upload'}`;
+  const safeFileName = sanitizeFileName(fileName, 'upload');
+  const key = `materials/${uuidv4()}-${safeFileName}`;
   const s3 = getS3Client();
 
   try {
@@ -52,7 +73,7 @@ const uploadToS3 = async ({ buffer, fileName, mimeType }) => {
         Key: key,
         Body: buffer,
         ContentType: mimeType || 'application/octet-stream',
-        ContentDisposition: `attachment; filename=\"${fileName || 'material'}\"`,
+        ContentDisposition: `attachment; filename="${safeFileName}"`,
       })
     );
   } catch (error) {
@@ -159,11 +180,12 @@ const generatePresignedUrl = async ({ fileUrl, expiresIn = 300, fileName, inline
   const key = decodeURIComponent(match[1]);
   const s3 = getS3Client();
 
+  const safeDownloadName = sanitizeFileName(fileName, 'material');
   let disposition;
   if (inline) {
-    disposition = fileName ? `inline; filename="${fileName}"` : 'inline';
+    disposition = safeDownloadName ? `inline; filename="${safeDownloadName}"` : 'inline';
   } else {
-    disposition = fileName ? `attachment; filename="${fileName}"` : 'attachment';
+    disposition = safeDownloadName ? `attachment; filename="${safeDownloadName}"` : 'attachment';
   }
 
   const command = new GetObjectCommand({
@@ -183,12 +205,12 @@ const generatePresignedUrl = async ({ fileUrl, expiresIn = 300, fileName, inline
       
 
     if (isAccessDenied) {
-      console.error(error);
       throw new ApiError(
         403,
         `S3 access denied. Allow s3:GetObject on arn:aws:s3:::${env.S3_BUCKET}/materials/* for the configured IAM user to generate presigned URLs.`
       );
     }
+    console.log(error);
 
     throw error;
   }

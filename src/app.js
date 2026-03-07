@@ -33,6 +33,7 @@ const adminUsersRoutes = require('./routes/adminUsers.routes');
 const adminPricingRoutes = require('./routes/adminPricing.routes');
 const searchRoutes = require('./routes/search.routes');
 const feedbackRoutes = require('./routes/feedback.routes');
+const notificationRoutes = require('./routes/notification.routes');
 
 const app = express();
 
@@ -135,6 +136,7 @@ app.use('/api/admin/users', adminUsersRoutes);
 app.use('/api/admin', adminPricingRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/feedback', feedbackRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Timeout error handler (must be before 404 handler)
 app.use(timeoutHandler);

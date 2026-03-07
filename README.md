@@ -79,6 +79,40 @@ backend/
 ✅ Request logging (Morgan)  
 ✅ Production-ready structure  
 
+## Notifications System (In-app + Push)
+
+This backend supports dual-channel notifications to reduce email cost:
+
+- **In-app notifications** stored in MongoDB per user
+- **Push notifications** delivered through Firebase Cloud Messaging via Firebase Admin SDK
+
+### Required Environment Variables for Push
+
+```env
+PUSH_PROVIDER=firebase
+FIREBASE_PROJECT_ID=your_firebase_project_id
+FIREBASE_SERVICE_ACCOUNT_JSON={"type":"service_account",...}
+PUSH_FCM_BATCH_SIZE=500
+NOTIFICATIONS_DEFAULT_PAGE_SIZE=20
+NOTIFICATIONS_MAX_PAGE_SIZE=100
+```
+
+### User Notification API
+
+- `GET /api/notifications?page=1&limit=20&unreadOnly=false&type=general`
+- `GET /api/notifications/unread-count`
+- `PATCH /api/notifications/:notificationId/read`
+- `PATCH /api/notifications/read-all`
+- `POST /api/notifications/push-token`
+- `DELETE /api/notifications/push-token`
+
+### Admin Notification API
+
+- `POST /api/admin/analytics/notifications/send`
+  - Supports channels: `in_app`, `push`
+  - Supports filters: `plan`, `role`, `universityId`, `isActive`
+
+
 ## Maintenance Scripts
 
 Bulk verify already-created emails:

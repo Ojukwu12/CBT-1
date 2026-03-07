@@ -154,6 +154,33 @@ const userSchema = new mongoose.Schema(
         default: null,
       },
     }],
+    pushTokens: [{
+      token: {
+        type: String,
+        required: true,
+      },
+      platform: {
+        type: String,
+        enum: ['android', 'ios', 'web', 'unknown'],
+        default: 'unknown',
+      },
+      deviceId: {
+        type: String,
+        default: null,
+      },
+      isActive: {
+        type: Boolean,
+        default: true,
+      },
+      lastSeenAt: {
+        type: Date,
+        default: Date.now,
+      },
+      createdAt: {
+        type: Date,
+        default: Date.now,
+      },
+    }],
   },
   { timestamps: true }
 );

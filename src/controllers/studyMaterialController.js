@@ -474,32 +474,66 @@ const deleteStudyMaterial = asyncHandler(async (req, res) => {
 
 const rateStudyMaterial = asyncHandler(async (req, res) => {
   const { materialId } = req.params;
+  const { courseId } = req.params;
   const { rating } = req.body;
+  const normalizedRating = Number(rating);
 
   ensureValidMaterialId(materialId);
 
-  if (!rating || rating < 1 || rating > 5) {
+  if (!Number.isFinite(normalizedRating) || !Number.isInteger(normalizedRating) || normalizedRating < 1 || normalizedRating > 5) {
     throw new ApiError(400, 'Rating must be between 1 and 5');
   }
 
-  const material = await StudyMaterial.findByIdAndUpdate(
-    materialId,
+  if (courseId && !mongoose.Types.ObjectId.isValid(courseId)) {
+    throw new ApiError(400, 'Invalid course id');
+  }
+
+  const existingMaterial = await StudyMaterial.findById(materialId).select('courseId isActive');
+
+  if (!existingMaterial) {
+    throw new ApiError(404, 'Study material not found');
+  }
+
+  if (!existingMaterial.isActive) {
+    throw new ApiError(403, 'This study material is no longer available');
+  }
+
+  if (courseId && existingMaterial.courseId.toString() !== courseId) {
+    throw new ApiError(400, 'Study material does not belong to the specified course');
+  }
+
+  const material = await StudyMaterial.findByIdAndUpdate(materialId, [
     {
-      $inc: {
-        'rating.count': 1,
-        'rating.average': rating,
+      $set: {
+        'rating.average': {
+          $let: {
+            vars: {
+              count: { $ifNull: ['$rating.count', 0] },
+              average: { $ifNull: ['$rating.average', 0] },
+            },
+            in: {
+              $divide: [
+                {
+                  $add: [
+                    { $multiply: ['$$average', '$$count'] },
+                    normalizedRating,
+                  ],
+                },
+                { $add: ['$$count', 1] },
+              ],
+            },
+          },
+        },
+        'rating.count': {
+          $add: [{ $ifNull: ['$rating.count', 0] }, 1],
+        },
       },
     },
-    { new: true }
-  );
+  ], { new: true });
 
   if (!material) {
     throw new ApiError(404, 'Study material not found');
   }
-
-  // Recalculate average
-  material.rating.average = material.rating.average / material.rating.count;
-  await material.save();
 
   res.status(200).json({
     success: true,

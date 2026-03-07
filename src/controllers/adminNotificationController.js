@@ -3,6 +3,7 @@ const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const ApiResponse = require('../utils/apiResponse');
 const emailService = require('../services/emailService');
+const notificationService = require('../services/notificationService');
 const Logger = require('../utils/logger');
 
 const logger = new Logger('AdminNotificationController');
@@ -229,9 +230,45 @@ const sendPlanExpiryReminder = asyncHandler(async (req, res) => {
   }
 });
 
+/**
+ * Send in-app and/or push notifications to a user segment
+ * POST /api/admin/notifications/send
+ */
+const sendAppNotification = asyncHandler(async (req, res) => {
+  const {
+    title,
+    message,
+    type = 'general',
+    channels = ['in_app'],
+    filters = {},
+    data = {},
+    expiresAt = null,
+  } = req.body;
+
+  if (!title || !message) {
+    throw new ApiError(400, 'Title and message are required');
+  }
+
+  const result = await notificationService.broadcast({
+    title,
+    message,
+    type,
+    channels,
+    filters,
+    data,
+    createdBy: req.user.id,
+    expiresAt,
+  });
+
+  res.status(200).json(
+    new ApiResponse(200, result, 'Notification broadcast completed')
+  );
+});
+
 module.exports = {
   sendBulkEmail,
   sendAnnouncement,
   sendMaintenanceNotification,
   sendPlanExpiryReminder,
+  sendAppNotification,
 };

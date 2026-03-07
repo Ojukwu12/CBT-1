@@ -3,7 +3,7 @@ const studyMaterialController = require('../controllers/studyMaterialController'
 const { verifyToken } = require('../middleware/auth.middleware');
 const { upload } = require('../middleware/upload.middleware');
 const validate = require('../middleware/validate.middleware');
-const { updateStudyMaterialSchema, studyMaterialParamsSchema } = require('../validators/studyMaterial.validator');
+const { updateStudyMaterialSchema, studyMaterialParamsSchema, rateStudyMaterialSchema } = require('../validators/studyMaterial.validator');
 const ApiError = require('../utils/ApiError');
 
 const router = express.Router({ mergeParams: true });
@@ -59,8 +59,8 @@ router.delete('/:courseId/:materialId', isAdmin, validate(studyMaterialParamsSch
 router.delete('/:materialId', isAdmin, studyMaterialController.deleteStudyMaterial);
 
 // Rate study material
-router.post('/:courseId/:materialId/rate', studyMaterialController.rateStudyMaterial);
+router.post('/:courseId/:materialId/rate', validate(rateStudyMaterialSchema), studyMaterialController.rateStudyMaterial);
 // Preferred rate route (uses parent :courseId)
-router.post('/:materialId/rate', studyMaterialController.rateStudyMaterial);
+router.post('/:materialId/rate', validate(rateStudyMaterialSchema), studyMaterialController.rateStudyMaterial);
 
 module.exports = router;
