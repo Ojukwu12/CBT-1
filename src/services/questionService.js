@@ -153,6 +153,33 @@ const deleteQuestion = async (questionId) => {
   return question;
 };
 
+const bulkDeleteQuestions = async ({ courseId, topicId, statuses = [] }) => {
+  if (!courseId && !topicId) {
+    throw new ApiError(400, 'courseId or topicId is required');
+  }
+
+  if (!Array.isArray(statuses) || statuses.length === 0) {
+    throw new ApiError(400, 'At least one status is required');
+  }
+
+  const filter = {
+    ...(courseId && { courseId }),
+    ...(topicId && { topicId }),
+    status: { $in: statuses },
+  };
+
+  const result = await Question.deleteMany(filter);
+
+  return {
+    deletedCount: result.deletedCount || 0,
+    filter: {
+      courseId: courseId || null,
+      topicId: topicId || null,
+      statuses,
+    },
+  };
+};
+
 const updateQuestion = async (questionId, updateData) => {
   const question = await Question.findOneAndUpdate(
     {
@@ -210,6 +237,7 @@ module.exports = {
   approveQuestion,
   rejectQuestion,
   deleteQuestion,
+  bulkDeleteQuestions,
   updateQuestion,
   getPendingQuestions,
   getQuestionStats,

@@ -251,6 +251,90 @@ const getQuestionStats = asyncHandler(async (req, res) => {
   });
 });
 
+const deleteCoursePendingQuestions = asyncHandler(async (req, res) => {
+  const { courseId } = req.params;
+  const result = await questionService.bulkDeleteQuestions({
+    courseId,
+    statuses: ['pending'],
+  });
+
+  res.status(200).json({
+    success: true,
+    data: result,
+    message: 'Pending questions under course deleted successfully',
+  });
+});
+
+const deleteCourseApprovedQuestions = asyncHandler(async (req, res) => {
+  const { courseId } = req.params;
+  const result = await questionService.bulkDeleteQuestions({
+    courseId,
+    statuses: ['approved'],
+  });
+
+  res.status(200).json({
+    success: true,
+    data: result,
+    message: 'Approved questions under course deleted successfully',
+  });
+});
+
+const deleteCoursePendingAndApprovedQuestions = asyncHandler(async (req, res) => {
+  const { courseId } = req.params;
+  const result = await questionService.bulkDeleteQuestions({
+    courseId,
+    statuses: ['pending', 'approved'],
+  });
+
+  res.status(200).json({
+    success: true,
+    data: result,
+    message: 'Pending and approved questions under course deleted successfully',
+  });
+});
+
+const deleteTopicPendingQuestions = asyncHandler(async (req, res) => {
+  const { topicId } = req.params;
+  const result = await questionService.bulkDeleteQuestions({
+    topicId,
+    statuses: ['pending'],
+  });
+
+  res.status(200).json({
+    success: true,
+    data: result,
+    message: 'Pending questions under topic deleted successfully',
+  });
+});
+
+const deleteTopicApprovedQuestions = asyncHandler(async (req, res) => {
+  const { topicId } = req.params;
+  const result = await questionService.bulkDeleteQuestions({
+    topicId,
+    statuses: ['approved'],
+  });
+
+  res.status(200).json({
+    success: true,
+    data: result,
+    message: 'Approved questions under topic deleted successfully',
+  });
+});
+
+const deleteTopicPendingAndApprovedQuestions = asyncHandler(async (req, res) => {
+  const { topicId } = req.params;
+  const result = await questionService.bulkDeleteQuestions({
+    topicId,
+    statuses: ['pending', 'approved'],
+  });
+
+  res.status(200).json({
+    success: true,
+    data: result,
+    message: 'Pending and approved questions under topic deleted successfully',
+  });
+});
+
 module.exports = {
   createQuestion,
   listQuestions,
@@ -262,4 +346,10 @@ module.exports = {
   updateQuestion,
   deleteQuestion,
   getQuestionStats,
+  deleteCoursePendingQuestions,
+  deleteCourseApprovedQuestions,
+  deleteCoursePendingAndApprovedQuestions,
+  deleteTopicPendingQuestions,
+  deleteTopicApprovedQuestions,
+  deleteTopicPendingAndApprovedQuestions,
 };

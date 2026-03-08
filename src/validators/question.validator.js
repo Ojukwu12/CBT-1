@@ -42,6 +42,14 @@ const questionIdSchema = Joi.object({
   questionId: Joi.string().regex(/^[0-9a-fA-F]{24}$/).required(),
 });
 
+const courseIdParamSchema = Joi.object({
+  courseId: Joi.string().regex(/^[0-9a-fA-F]{24}$/).required(),
+});
+
+const topicIdParamSchema = Joi.object({
+  topicId: Joi.string().regex(/^[0-9a-fA-F]{24}$/).required(),
+});
+
 const updateQuestionSchema = Joi.object({
   text: Joi.string().min(5).max(1000).optional(),
   options: Joi.object({
@@ -67,5 +75,7 @@ module.exports = {
   approveRejectSchema,
   listQuestionsSchema,
   questionIdSchema,
+  courseIdParamSchema,
+  topicIdParamSchema,
   updateQuestionSchema,
 };
