@@ -73,8 +73,11 @@ class NotificationService {
       const users = await User.find({ _id: { $in: normalizedIds } }).select('pushTokens');
       const tokens = users
         .flatMap((user) => user.pushTokens || [])
-        .filter((pushToken) => pushToken?.isActive !== false)
-        .map((pushToken) => pushToken.token)
+        .filter((pushToken) => {
+          if (typeof pushToken === 'string') return true;
+          return pushToken?.isActive !== false;
+        })
+        .map((pushToken) => (typeof pushToken === 'string' ? pushToken : pushToken?.token))
         .filter(Boolean);
 
       pushResult = await pushNotificationService.sendToTokens(tokens, {

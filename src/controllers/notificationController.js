@@ -46,7 +46,8 @@ const markAllNotificationsAsRead = asyncHandler(async (req, res) => {
 });
 
 const registerPushToken = asyncHandler(async (req, res) => {
-  const { token, platform = 'unknown', deviceId = null } = req.body;
+  const token = (req.body.token || req.body.fcmToken || req.body.deviceToken || req.body.pushToken || '').trim();
+  const { platform = 'unknown', deviceId = null } = req.body;
 
   await notificationService.registerPushToken({
     userId: req.user.id,
@@ -59,7 +60,7 @@ const registerPushToken = asyncHandler(async (req, res) => {
 });
 
 const unregisterPushToken = asyncHandler(async (req, res) => {
-  const { token } = req.body;
+  const token = (req.body.token || req.body.fcmToken || req.body.deviceToken || req.body.pushToken || '').trim();
 
   const result = await notificationService.unregisterPushToken({
     userId: req.user.id,
@@ -81,14 +82,32 @@ const markNotificationParamsSchema = Joi.object({
 });
 
 const registerPushTokenSchema = Joi.object({
-  token: Joi.string().required().min(10).max(500),
+  token: Joi.string().trim().min(10).max(500).optional(),
+  fcmToken: Joi.string().trim().min(10).max(500).optional(),
+  deviceToken: Joi.string().trim().min(10).max(500).optional(),
+  pushToken: Joi.string().trim().min(10).max(500).optional(),
   platform: Joi.string().valid('android', 'ios', 'web', 'unknown').optional(),
   deviceId: Joi.string().max(120).allow('', null).optional(),
-});
+}).custom((value, helpers) => {
+  if (!(value.token || value.fcmToken || value.deviceToken || value.pushToken)) {
+    return helpers.error('any.required');
+  }
+
+  return value;
+}, 'push token required validation');
 
 const unregisterPushTokenSchema = Joi.object({
-  token: Joi.string().required().min(10).max(500),
-});
+  token: Joi.string().trim().min(10).max(500).optional(),
+  fcmToken: Joi.string().trim().min(10).max(500).optional(),
+  deviceToken: Joi.string().trim().min(10).max(500).optional(),
+  pushToken: Joi.string().trim().min(10).max(500).optional(),
+}).custom((value, helpers) => {
+  if (!(value.token || value.fcmToken || value.deviceToken || value.pushToken)) {
+    return helpers.error('any.required');
+  }
+
+  return value;
+}, 'push token required validation');
 
 module.exports = {
   listNotifications,
