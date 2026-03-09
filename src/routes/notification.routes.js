@@ -1,9 +1,13 @@
 const express = require('express');
 const { verifyToken } = require('../middleware/auth.middleware');
 const validate = require('../middleware/validate.middleware');
+const { guestPushTokenLimiter } = require('../middleware/rateLimit.middleware');
 const notificationController = require('../controllers/notificationController');
 
 const router = express.Router();
+
+router.post('/guest/push-token', guestPushTokenLimiter, validate(notificationController.registerGuestPushTokenSchema), notificationController.registerGuestPushToken);
+router.delete('/guest/push-token', guestPushTokenLimiter, validate(notificationController.unregisterGuestPushTokenSchema), notificationController.unregisterGuestPushToken);
 
 router.use(verifyToken);
 

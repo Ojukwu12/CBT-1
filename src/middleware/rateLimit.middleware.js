@@ -85,6 +85,18 @@ const adminWriteLimiter = createRateLimiter(10 * 60 * 1000, 80, {
   message: 'Too many admin write actions. Please try again later.',
 });
 
+const guestPushTokenLimiter = createRateLimiter(15 * 60 * 1000, 40, {
+  keyGenerator: (req) => {
+    const deviceId = normalizeIdentifier(req.body?.deviceId || '');
+    if (deviceId) {
+      return `device:${deviceId}`;
+    }
+
+    return `ip:${req.ip}`;
+  },
+  message: 'Too many push token requests. Please try again later.',
+});
+
 const aiLimiter = createRateLimiter(60 * 60 * 1000, 10); // 10 AI requests per hour
 
 // Payment-specific limiters (stricter for financial operations)
@@ -103,6 +115,7 @@ module.exports = {
   authRefreshLimiter,
   adminReadLimiter,
   adminWriteLimiter,
+  guestPushTokenLimiter,
   aiLimiter,
   paymentInitializeLimiter,
   paymentVerifyLimiter,

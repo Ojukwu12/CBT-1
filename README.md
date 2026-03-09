@@ -103,7 +103,10 @@ NOTIFICATIONS_MAX_PAGE_SIZE=100
 - `GET /api/notifications/unread-count`
 - `PATCH /api/notifications/:notificationId/read`
 - `PATCH /api/notifications/read-all`
+- `POST /api/notifications/guest/push-token` (public)
+- `DELETE /api/notifications/guest/push-token` (public)
 - `POST /api/notifications/push-token`
+  - Supports `guestTokenId` to claim previously registered guest token after login
 - `DELETE /api/notifications/push-token`
 
 ### Admin Notification API

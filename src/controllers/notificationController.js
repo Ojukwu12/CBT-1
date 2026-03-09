@@ -4,6 +4,10 @@ const ApiError = require('../utils/ApiError');
 const ApiResponse = require('../utils/apiResponse');
 const notificationService = require('../services/notificationService');
 
+const resolveTokenFromBody = (body = {}) => {
+  return (body.token || body.fcmToken || body.deviceToken || body.pushToken || '').trim();
+};
+
 const listNotifications = asyncHandler(async (req, res) => {
   const { page = 1, limit = 20, unreadOnly = false, type } = req.query;
 
@@ -46,21 +50,33 @@ const markAllNotificationsAsRead = asyncHandler(async (req, res) => {
 });
 
 const registerPushToken = asyncHandler(async (req, res) => {
-  const token = (req.body.token || req.body.fcmToken || req.body.deviceToken || req.body.pushToken || '').trim();
-  const { platform = 'unknown', deviceId = null } = req.body;
+  const token = resolveTokenFromBody(req.body);
+  const { platform = 'unknown', deviceId = null, guestTokenId = null } = req.body;
 
-  await notificationService.registerPushToken({
-    userId: req.user.id,
-    token,
-    platform,
-    deviceId,
-  });
+  let result;
+  if (guestTokenId && !token) {
+    result = await notificationService.claimGuestPushToken({
+      userId: req.user.id,
+      guestTokenId,
+    });
+  } else {
+    result = await notificationService.registerPushToken({
+      userId: req.user.id,
+      token,
+      platform,
+      deviceId,
+    });
+  }
+
+  if (!result?.registered) {
+    throw new ApiError(400, result?.reason || 'Failed to register push token');
+  }
 
   res.status(200).json(new ApiResponse(200, { registered: true }, 'Push token registered successfully'));
 });
 
 const unregisterPushToken = asyncHandler(async (req, res) => {
-  const token = (req.body.token || req.body.fcmToken || req.body.deviceToken || req.body.pushToken || '').trim();
+  const token = resolveTokenFromBody(req.body);
 
   const result = await notificationService.unregisterPushToken({
     userId: req.user.id,
@@ -68,6 +84,37 @@ const unregisterPushToken = asyncHandler(async (req, res) => {
   });
 
   res.status(200).json(new ApiResponse(200, result, 'Push token removed successfully'));
+});
+
+const registerGuestPushToken = asyncHandler(async (req, res) => {
+  const token = resolveTokenFromBody(req.body);
+  const { platform = 'unknown', deviceId = null } = req.body;
+
+  const result = await notificationService.registerGuestPushToken({
+    token,
+    platform,
+    deviceId,
+    ipAddress: req.ip,
+    userAgent: req.get('user-agent') || null,
+  });
+
+  if (!result?.registered) {
+    throw new ApiError(400, result?.reason || 'Failed to register guest push token');
+  }
+
+  res.status(200).json(new ApiResponse(200, result, 'Guest push token registered successfully'));
+});
+
+const unregisterGuestPushToken = asyncHandler(async (req, res) => {
+  const token = resolveTokenFromBody(req.body);
+  const { guestTokenId = null } = req.body;
+
+  const result = await notificationService.unregisterGuestPushToken({
+    token,
+    guestTokenId,
+  });
+
+  res.status(200).json(new ApiResponse(200, result, 'Guest push token removed successfully'));
 });
 
 const notificationListQuerySchema = Joi.object({
@@ -86,10 +133,11 @@ const registerPushTokenSchema = Joi.object({
   fcmToken: Joi.string().trim().min(10).max(500).optional(),
   deviceToken: Joi.string().trim().min(10).max(500).optional(),
   pushToken: Joi.string().trim().min(10).max(500).optional(),
+  guestTokenId: Joi.string().trim().length(24).hex().optional(),
   platform: Joi.string().valid('android', 'ios', 'web', 'unknown').optional(),
   deviceId: Joi.string().max(120).allow('', null).optional(),
 }).custom((value, helpers) => {
-  if (!(value.token || value.fcmToken || value.deviceToken || value.pushToken)) {
+  if (!(value.token || value.fcmToken || value.deviceToken || value.pushToken || value.guestTokenId)) {
     return helpers.error('any.required');
   }
 
@@ -109,6 +157,35 @@ const unregisterPushTokenSchema = Joi.object({
   return value;
 }, 'push token required validation');
 
+const registerGuestPushTokenSchema = Joi.object({
+  token: Joi.string().trim().min(10).max(500).optional(),
+  fcmToken: Joi.string().trim().min(10).max(500).optional(),
+  deviceToken: Joi.string().trim().min(10).max(500).optional(),
+  pushToken: Joi.string().trim().min(10).max(500).optional(),
+  platform: Joi.string().valid('android', 'ios', 'web', 'unknown').optional(),
+  deviceId: Joi.string().max(120).allow('', null).optional(),
+}).custom((value, helpers) => {
+  if (!(value.token || value.fcmToken || value.deviceToken || value.pushToken)) {
+    return helpers.error('any.required');
+  }
+
+  return value;
+}, 'guest push token required validation');
+
+const unregisterGuestPushTokenSchema = Joi.object({
+  token: Joi.string().trim().min(10).max(500).optional(),
+  fcmToken: Joi.string().trim().min(10).max(500).optional(),
+  deviceToken: Joi.string().trim().min(10).max(500).optional(),
+  pushToken: Joi.string().trim().min(10).max(500).optional(),
+  guestTokenId: Joi.string().trim().length(24).hex().optional(),
+}).custom((value, helpers) => {
+  if (!(value.token || value.fcmToken || value.deviceToken || value.pushToken || value.guestTokenId)) {
+    return helpers.error('any.required');
+  }
+
+  return value;
+}, 'guest push token required validation');
+
 module.exports = {
   listNotifications,
   getUnreadCount,
@@ -116,8 +193,12 @@ module.exports = {
   markAllNotificationsAsRead,
   registerPushToken,
   unregisterPushToken,
+  registerGuestPushToken,
+  unregisterGuestPushToken,
   notificationListQuerySchema,
   markNotificationParamsSchema,
   registerPushTokenSchema,
   unregisterPushTokenSchema,
+  registerGuestPushTokenSchema,
+  unregisterGuestPushTokenSchema,
 };

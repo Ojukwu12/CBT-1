@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const Notification = require('../models/Notification');
+const GuestPushToken = require('../models/GuestPushToken');
 const User = require('../models/User');
 const pushNotificationService = require('./pushNotificationService');
 const Logger = require('../utils/logger');
@@ -135,10 +136,16 @@ class NotificationService {
   }
 
   async registerPushToken({ userId, token, platform = 'unknown', deviceId = null }) {
+    const normalizedToken = (token || '').trim();
+
+    if (!normalizedToken) {
+      return { registered: false, reason: 'No token provided' };
+    }
+
     await User.updateOne(
       { _id: userId },
       {
-        $pull: { pushTokens: { token } },
+        $pull: { pushTokens: { token: normalizedToken } },
       }
     );
 
@@ -147,7 +154,7 @@ class NotificationService {
       {
         $push: {
           pushTokens: {
-            token,
+            token: normalizedToken,
             platform,
             deviceId,
             isActive: true,
@@ -158,18 +165,125 @@ class NotificationService {
       }
     );
 
+    await GuestPushToken.deleteMany({ token: normalizedToken });
+
     return { registered: true };
   }
 
+  async registerGuestPushToken({ token, platform = 'unknown', deviceId = null, ipAddress = null, userAgent = null }) {
+    const normalizedToken = (token || '').trim();
+
+    if (!normalizedToken) {
+      return { registered: false, reason: 'No token provided' };
+    }
+
+    const ttlDays = Math.max(1, Math.min(parseInt(env.GUEST_PUSH_TOKEN_TTL_DAYS, 10) || 30, 90));
+    const expiresAt = new Date(Date.now() + ttlDays * 24 * 60 * 60 * 1000);
+
+    const guestToken = await GuestPushToken.findOneAndUpdate(
+      { token: normalizedToken },
+      {
+        $set: {
+          platform,
+          deviceId,
+          ipAddress,
+          userAgent,
+          consentGiven: true,
+          claimedBy: null,
+          claimedAt: null,
+          lastSeenAt: new Date(),
+          expiresAt,
+        },
+      },
+      {
+        upsert: true,
+        new: true,
+        setDefaultsOnInsert: true,
+      }
+    );
+
+    return {
+      registered: true,
+      guestTokenId: guestToken._id,
+      expiresAt: guestToken.expiresAt,
+    };
+  }
+
+  async claimGuestPushToken({ userId, guestTokenId }) {
+    if (!guestTokenId) {
+      return { registered: false, reason: 'No guest token id provided' };
+    }
+
+    const guestToken = await GuestPushToken.findById(guestTokenId);
+    if (!guestToken) {
+      return { registered: false, reason: 'Guest token not found' };
+    }
+
+    if (guestToken.expiresAt && guestToken.expiresAt.getTime() <= Date.now()) {
+      return { registered: false, reason: 'Guest token expired' };
+    }
+
+    const registerResult = await this.registerPushToken({
+      userId,
+      token: guestToken.token,
+      platform: guestToken.platform || 'unknown',
+      deviceId: guestToken.deviceId || null,
+    });
+
+    if (!registerResult.registered) {
+      return registerResult;
+    }
+
+    await GuestPushToken.updateOne(
+      { _id: guestToken._id },
+      {
+        $set: {
+          claimedBy: userId,
+          claimedAt: new Date(),
+        },
+      }
+    );
+
+    return {
+      registered: true,
+      token: guestToken.token,
+    };
+  }
+
   async unregisterPushToken({ userId, token }) {
+    const normalizedToken = (token || '').trim();
+
+    if (!normalizedToken) {
+      return { removed: false };
+    }
+
     const result = await User.updateOne(
       { _id: userId },
       {
-        $pull: { pushTokens: { token } },
+        $pull: { pushTokens: { token: normalizedToken } },
       }
     );
 
     return { removed: result.modifiedCount > 0 };
+  }
+
+  async unregisterGuestPushToken({ token = null, guestTokenId = null }) {
+    const normalizedToken = (token || '').trim();
+
+    if (!normalizedToken && !guestTokenId) {
+      return { removed: false };
+    }
+
+    const query = { claimedBy: null };
+
+    if (guestTokenId) {
+      query._id = guestTokenId;
+    } else {
+      query.token = normalizedToken;
+    }
+
+    const result = await GuestPushToken.deleteOne(query);
+    return { removed: result.deletedCount > 0 };
   }
 
   async listForUser({ userId, page = 1, limit = env.NOTIFICATIONS_DEFAULT_PAGE_SIZE || 20, unreadOnly = false, type }) {
