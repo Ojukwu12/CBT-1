@@ -37,6 +37,12 @@ class LeaderboardController {
 
     res.status(200).json(new ApiResponse(200, result, 'Monthly leaderboard retrieved'));
   });
+
+  static forceRecomputeLeaderboards = asyncHandler(async (req, res) => {
+    const result = await LeaderboardService.forceRecomputeAllLeaderboards();
+
+    res.status(200).json(new ApiResponse(200, result, 'Leaderboards recomputed successfully'));
+  });
 }
 
 module.exports = LeaderboardController;

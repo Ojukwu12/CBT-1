@@ -1,6 +1,7 @@
 const express = require('express');
 const leaderboardController = require('../controllers/leaderboardController');
 const { verifyToken } = require('../middleware/auth.middleware');
+const { requireRole } = require('../middleware/accessControl.middleware');
 const validate = require('../middleware/validate.middleware');
 const Joi = require('joi');
 
@@ -42,5 +43,11 @@ router.get('/course/:courseId', validate(leaderboardParamsSchema, 'params'), val
  * Get monthly leaderboard (format: YYYY-MM)
  */
 router.get('/monthly/:month', validate(leaderboardParamsSchema, 'params'), validate(leaderboardQuerySchema, 'query'), leaderboardController.getMonthlyLeaderboard);
+
+/**
+ * POST /api/leaderboards/admin/recompute
+ * Admin-only: force full leaderboard recomputation
+ */
+router.post('/admin/recompute', requireRole('admin'), leaderboardController.forceRecomputeLeaderboards);
 
 module.exports = router;

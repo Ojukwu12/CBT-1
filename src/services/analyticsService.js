@@ -3,6 +3,7 @@ const ExamSession = require('../models/ExamSession');
 const Question = require('../models/Question');
 const Topic = require('../models/Topic');
 const Course = require('../models/Course');
+const LeaderboardService = require('./leaderboardService');
 const ApiError = require('../utils/ApiError');
 
 class AnalyticsService {
@@ -347,22 +348,37 @@ class AnalyticsService {
       };
     }
 
-    // Count users with higher average score
-    const betterUsers = await UserAnalytics.countDocuments({
-      averageScore: { $gt: userAnalytics.averageScore }
-    });
+    const position = await LeaderboardService.getUserGlobalPosition(userId);
 
-    const totalUsers = await UserAnalytics.countDocuments();
-    const rank = betterUsers + 1;
-    const percentile = Math.round((((totalUsers - betterUsers) / totalUsers) * 100));
+    if (!position.eligible) {
+      const examsCompleted = userAnalytics.totalExamsCompleted || 0;
+      const minimumExamsRequired = position.minimumExamsRequired;
+      const examsRemaining = Math.max(minimumExamsRequired - examsCompleted, 0);
+
+      return {
+        userId,
+        rank: null,
+        score: userAnalytics.averageScore,
+        percentile: 0,
+        totalUsers: position.totalUsers,
+        examsCompleted,
+        minimumExamsRequired,
+        examsRemaining,
+        message: examsRemaining > 0
+          ? `Complete ${examsRemaining} more exam${examsRemaining === 1 ? '' : 's'} to qualify for leaderboard ranking`
+          : 'Not currently ranked on leaderboard'
+      };
+    }
 
     return {
       userId,
-      rank,
-      score: userAnalytics.averageScore,
-      percentile,
-      totalUsers,
-      message: `You're in the top ${percentile}%`
+      rank: position.rank,
+      score: position.score,
+      percentile: position.percentile,
+      totalUsers: position.totalUsers,
+      examsCompleted: position.examsCompleted,
+      minimumExamsRequired: position.minimumExamsRequired,
+      message: `You're in the top ${position.percentile}%`
     };
   }
 }

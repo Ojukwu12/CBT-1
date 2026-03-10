@@ -5,6 +5,7 @@ const UserAnalytics = require('../models/UserAnalytics');
 const Course = require('../models/Course');
 const Topic = require('../models/Topic');
 const User = require('../models/User');
+const LeaderboardService = require('./leaderboardService');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const { sanitizeQuestionText } = require('../utils/questionText');
@@ -156,6 +157,13 @@ class ExamService {
     }
 
     await analytics.updateStats(updated);
+
+    try {
+      await LeaderboardService.refreshLeaderboardsForExam(updated);
+    } catch (error) {
+      console.error('Failed to refresh leaderboard after exam auto-finalization', error.message);
+    }
+
     return updated;
   }
   /**
@@ -523,6 +531,12 @@ class ExamService {
     }
 
     await analytics.updateStats(updatedExamSession);
+
+    try {
+      await LeaderboardService.refreshLeaderboardsForExam(updatedExamSession);
+    } catch (error) {
+      console.error('Failed to refresh leaderboard after exam submission', error.message);
+    }
 
     return {
       examSessionId: updatedExamSession._id,
